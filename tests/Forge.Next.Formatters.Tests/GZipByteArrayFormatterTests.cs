@@ -9,12 +9,12 @@ using Xunit;
 namespace Forge.Next.Formatters.Tests;
 
 /// <summary>
-/// Unit tests for <see cref="GZipFormatter"/>, which compresses and decompresses a
+/// Unit tests for <see cref="GZipByteArrayFormatter"/>, which compresses and decompresses a
 /// <see cref="byte"/> array using GZip. Unlike the other compression formatters, the
-/// single-stream read overload also validates that <see cref="GZipFormatter.BufferSize"/> is
+/// single-stream read overload also validates that <see cref="GZipByteArrayFormatter.BufferSize"/> is
 /// positive, so that branch gets its own test.
 /// </summary>
-public class GZipFormatterTests
+public class GZipByteArrayFormatterTests
 {
     /// <summary>
     /// The formatter starts with the shared default buffer size (8 KB).
@@ -23,7 +23,7 @@ public class GZipFormatterTests
     public void BufferSize_Default_IsDefaultBufferSize_Test()
     {
         // Act
-        GZipFormatter formatter = new GZipFormatter();
+        GZipByteArrayFormatter formatter = new GZipByteArrayFormatter();
 
         // Assert
         Assert.Equal(Consts.DefaultBufferSize, formatter.BufferSize);
@@ -36,7 +36,7 @@ public class GZipFormatterTests
     public async Task WriteAsync_NullData_ReturnsValidationError_Test()
     {
         // Arrange
-        GZipFormatter formatter = new GZipFormatter();
+        GZipByteArrayFormatter formatter = new GZipByteArrayFormatter();
         using MemoryStream output = new MemoryStream();
 
         // Act
@@ -55,7 +55,7 @@ public class GZipFormatterTests
     public async Task WriteAsync_NullOutputStream_ReturnsValidationError_Test()
     {
         // Arrange
-        GZipFormatter formatter = new GZipFormatter();
+        GZipByteArrayFormatter formatter = new GZipByteArrayFormatter();
 
         // Act
         ErrorOr<Success> result = await formatter.WriteAsync(new byte[] { 1, 2, 3 }, null!);
@@ -73,7 +73,7 @@ public class GZipFormatterTests
     public async Task ReadAsync_NullInputStream_ReturnsValidationError_Test()
     {
         // Arrange
-        GZipFormatter formatter = new GZipFormatter();
+        GZipByteArrayFormatter formatter = new GZipByteArrayFormatter();
 
         // Act
         ErrorOr<byte[]?> result = await formatter.ReadAsync((Stream)null!);
@@ -96,7 +96,7 @@ public class GZipFormatterTests
     public async Task ReadAsync_NonPositiveBufferSize_ReturnsValidationError_Test(int bufferSize)
     {
         // Arrange: a valid stream but an invalid buffer size.
-        GZipFormatter formatter = new GZipFormatter { BufferSize = bufferSize };
+        GZipByteArrayFormatter formatter = new GZipByteArrayFormatter { BufferSize = bufferSize };
         using MemoryStream input = new MemoryStream(new byte[] { 1, 2, 3 });
 
         // Act
@@ -115,7 +115,7 @@ public class GZipFormatterTests
     public async Task ReadAsync_NullInputStreamWithOutput_ReturnsValidationError_Test()
     {
         // Arrange
-        GZipFormatter formatter = new GZipFormatter();
+        GZipByteArrayFormatter formatter = new GZipByteArrayFormatter();
         using MemoryStream output = new MemoryStream();
 
         // Act
@@ -134,7 +134,7 @@ public class GZipFormatterTests
     public async Task ReadAsync_NullOutputStream_ReturnsValidationError_Test()
     {
         // Arrange
-        GZipFormatter formatter = new GZipFormatter();
+        GZipByteArrayFormatter formatter = new GZipByteArrayFormatter();
         using MemoryStream input = new MemoryStream();
 
         // Act
@@ -154,7 +154,7 @@ public class GZipFormatterTests
     public async Task WriteAsyncThenReadAsync_RoundTripsByteArray_Test()
     {
         // Arrange
-        GZipFormatter formatter = new GZipFormatter();
+        GZipByteArrayFormatter formatter = new GZipByteArrayFormatter();
         byte[] original = Encoding.UTF8.GetBytes(new string('E', 1200) + "-gzip-payload");
         using MemoryStream compressed = new MemoryStream();
 
@@ -178,7 +178,7 @@ public class GZipFormatterTests
     public async Task WriteAsyncThenReadAsyncWithOutput_RoundTripsByteArray_Test()
     {
         // Arrange
-        GZipFormatter formatter = new GZipFormatter();
+        GZipByteArrayFormatter formatter = new GZipByteArrayFormatter();
         byte[] original = Encoding.UTF8.GetBytes(new string('F', 700) + "-gzip-output");
         using MemoryStream compressed = new MemoryStream();
 
@@ -204,7 +204,7 @@ public class GZipFormatterTests
     public async Task ReadAsync_NonReadableStream_ReturnsError_Test()
     {
         // Arrange
-        GZipFormatter formatter = new GZipFormatter();
+        GZipByteArrayFormatter formatter = new GZipByteArrayFormatter();
         Stream nonReadable = Substitute.For<Stream>();
         nonReadable.CanRead.Returns(false);
 
@@ -222,7 +222,7 @@ public class GZipFormatterTests
     public async Task WriteAsync_NonWritableStream_ReturnsError_Test()
     {
         // Arrange
-        GZipFormatter formatter = new GZipFormatter();
+        GZipByteArrayFormatter formatter = new GZipByteArrayFormatter();
         Stream nonWritable = Substitute.For<Stream>();
         nonWritable.CanWrite.Returns(false);
 

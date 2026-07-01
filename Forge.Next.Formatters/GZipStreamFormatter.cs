@@ -5,34 +5,34 @@ using System.IO.Compression;
 namespace Forge.Next.Formatters;
 
 /// <summary>
-/// GZipFormatter is a class that implements the IGZipFormatter interface for reading and writing GZip-compressed data.
+/// GZipStreamFormatter is a class that implements the IGZipStreamFormatter interface for reading and writing GZip-compressed data.
 /// </summary>
-public class GZipFormatter : IGZipFormatter
+public class GZipStreamFormatter : IGZipStreamFormatter
 {
 
     /// <summary>
-    /// Gets or sets the buffer size used for reading and writing data in the GZipFormatter. The default value is 8192 bytes.
+    /// Gets or sets the buffer size used for reading and writing data in the GZipStreamFormatter. The default value is 8192 bytes.
     /// </summary>
     public int BufferSize { get; set; } = Consts.DefaultBufferSize;
 
     /// <summary>
-    /// Reads GZip-compressed data from the provided input stream and returns the decompressed byte array.
+    /// Reads GZip-compressed data from the provided input stream and returns the decompressed stream.
     /// </summary>
     /// <param name="inputStream">The input stream containing GZip-compressed data.</param>
-    /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains the decompressed byte array.</returns>
-    public Task<ErrorOr<byte[]?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the decompressed stream.</returns>
+    public Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {
-        if (inputStream is null) return Task.FromResult((ErrorOr<byte[]?>)Error.Validation(description: nameof(inputStream)));
-        if (BufferSize <= 0) return Task.FromResult((ErrorOr<byte[]?>)Error.Validation(description: nameof(BufferSize)));
+        if (inputStream is null) return Task.FromResult((ErrorOr<Stream?>)Error.Validation(description: nameof(inputStream)));
+        if (BufferSize <= 0) return Task.FromResult((ErrorOr<Stream?>)Error.Validation(description: nameof(BufferSize)));
 
-        return this.ProtectAsync<GZipFormatter, byte[]?>(async (_, _) =>
+        return this.ProtectAsync<GZipStreamFormatter, Stream?>(async (_, _) =>
         {
-            using MemoryStream ms = new();
             using GZipStream gzipStream = new(inputStream, CompressionMode.Decompress, leaveOpen: true);
 
             byte[] buffer = new byte[BufferSize];
             int numRead = 0;
+            MemoryStream ms = new();
 
             while ((numRead = await gzipStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) != 0)
             {
@@ -41,7 +41,7 @@ public class GZipFormatter : IGZipFormatter
 
             await gzipStream.FlushAsync(cancellationToken);
 
-            return ms.ToArray();
+            return ms;
         });
     }
 
@@ -50,15 +50,15 @@ public class GZipFormatter : IGZipFormatter
     /// </summary>
     /// <param name="inputStream">The input stream containing GZip-compressed data.</param>
     /// <param name="outputStream">The output stream to write the decompressed data to.</param>
-    /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result indicates whether the operation was successful.</returns>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains a Success value if the operation completes successfully.</returns>
     public Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(inputStream)));
         if (outputStream is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(outputStream)));
         if (BufferSize <= 0) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(BufferSize)));
 
-        return this.ProtectAsync<GZipFormatter, Success>(async (_, _) =>
+        return this.ProtectAsync<GZipStreamFormatter, Success>(async (_, _) =>
         {
             using GZipStream gzipStream = new GZipStream(inputStream, CompressionMode.Decompress, true);
             byte[] buffer = new byte[BufferSize];
@@ -76,22 +76,32 @@ public class GZipFormatter : IGZipFormatter
     }
 
     /// <summary>
-    /// Writes the provided byte array to the specified output stream in GZip-compressed format.
+    /// Writes the provided data stream to the specified output stream using GZip compression.
     /// </summary>
-    /// <param name="data">The byte array containing the data to be compressed and written.</param>
+    /// <param name="data">The input stream containing the data to be compressed.</param>
     /// <param name="outputStream">The output stream to write the compressed data to.</param>
-    /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result indicates whether the operation was successful.</returns>
-    public Task<ErrorOr<Success>> WriteAsync(byte[] data, Stream outputStream, CancellationToken cancellationToken = default)
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that represents the asynchronous operation. The task result contains a Success value if the operation completes successfully.</returns>
+    public Task<ErrorOr<Success>> WriteAsync(Stream data, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (data is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(data)));
         if (outputStream is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(outputStream)));
+        if (BufferSize <= 0) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(BufferSize)));
 
-        return this.ProtectAsync<GZipFormatter, Success>(async (_, _) =>
+        return this.ProtectAsync<GZipStreamFormatter, Success>(async (_, _) =>
         {
             using GZipStream gzipStream = new GZipStream(outputStream, CompressionMode.Compress, true);
-            await gzipStream.WriteAsync(data, 0, data.Length, cancellationToken);
+
+            byte[] buffer = new byte[BufferSize];
+            int numRead = 0;
+
+            while ((numRead = await data.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) != 0)
+            {
+                await gzipStream.WriteAsync(buffer, 0, numRead, cancellationToken);
+            }
+
             await gzipStream.FlushAsync(cancellationToken);
+
             return Result.Success;
         });
     }

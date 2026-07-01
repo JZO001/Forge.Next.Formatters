@@ -38,7 +38,8 @@ public class ServiceCollectionExtensionsTests
     /// <param name="implementationType">The concrete implementation type expected.</param>
     /// <param name="expectedLifetime">The expected registration lifetime.</param>
     [Theory]
-    [InlineData(typeof(IGZipFormatter), typeof(GZipFormatter), ServiceLifetime.Singleton)]
+    [InlineData(typeof(IGZipByteArrayFormatter), typeof(GZipByteArrayFormatter), ServiceLifetime.Singleton)]
+    [InlineData(typeof(IGZipStreamFormatter), typeof(GZipStreamFormatter), ServiceLifetime.Singleton)]
     [InlineData(typeof(IXmlDataFormatter<>), typeof(XmlDataFormatter<>), ServiceLifetime.Singleton)]
     [InlineData(typeof(IBrotliStreamFormatter), typeof(BrotliStreamFormatter), ServiceLifetime.Singleton)]
     [InlineData(typeof(IBrotliByteArrayFormatter), typeof(BrotliByteArrayFormatter), ServiceLifetime.Singleton)]
@@ -65,11 +66,11 @@ public class ServiceCollectionExtensionsTests
     }
 
     /// <summary>
-    /// The method must register exactly the seven formatters it advertises and nothing more,
+    /// The method must register exactly the eight formatters it advertises and nothing more,
     /// guarding against accidental extra or duplicate registrations.
     /// </summary>
     [Fact]
-    public void AddForgeFormatters_RegistersExactlySevenServices_Test()
+    public void AddForgeFormatters_RegistersExactlyEightServices_Test()
     {
         // Arrange
         IServiceCollection services = new ServiceCollection();
@@ -78,7 +79,7 @@ public class ServiceCollectionExtensionsTests
         services.AddForgeFormatters();
 
         // Assert
-        Assert.Equal(7, services.Count);
+        Assert.Equal(8, services.Count);
     }
 
     /// <summary>
@@ -99,7 +100,8 @@ public class ServiceCollectionExtensionsTests
         System.IServiceProvider sp = scope.ServiceProvider;
 
         // Assert: every formatter resolves to its concrete implementation type.
-        Assert.IsType<GZipFormatter>(sp.GetRequiredService<IGZipFormatter>());
+        Assert.IsType<GZipByteArrayFormatter>(sp.GetRequiredService<IGZipByteArrayFormatter>());
+        Assert.IsType<GZipStreamFormatter>(sp.GetRequiredService<IGZipStreamFormatter>());
         Assert.IsType<BrotliStreamFormatter>(sp.GetRequiredService<IBrotliStreamFormatter>());
         Assert.IsType<BrotliByteArrayFormatter>(sp.GetRequiredService<IBrotliByteArrayFormatter>());
         Assert.IsType<AesByteArrayFormatter>(sp.GetRequiredService<IAesByteArrayFormatter>());
@@ -124,8 +126,8 @@ public class ServiceCollectionExtensionsTests
         using ServiceProvider provider = services.BuildServiceProvider();
 
         // Act & Assert (singleton): two resolutions yield the identical instance.
-        IGZipFormatter firstSingleton = provider.GetRequiredService<IGZipFormatter>();
-        IGZipFormatter secondSingleton = provider.GetRequiredService<IGZipFormatter>();
+        IGZipByteArrayFormatter firstSingleton = provider.GetRequiredService<IGZipByteArrayFormatter>();
+        IGZipByteArrayFormatter secondSingleton = provider.GetRequiredService<IGZipByteArrayFormatter>();
         Assert.Same(firstSingleton, secondSingleton);
 
         // Act & Assert (transient): two resolutions yield different instances.

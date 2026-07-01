@@ -5,9 +5,11 @@ Reference, practice and pattern implementations of **data formatters** for .NET:
 one small, predictable, `async` contract and never throws for expected failures — it returns an
 [`ErrorOr<T>`](https://github.com/amantinband/error-or) result instead.
 
+- **Package version:** `3.1.0`
 - **Target frameworks:** `net8.0`, `net9.0`, `net10.0`
 - **License:** Apache-2.0
 - **Package dependencies:** [`Forge.Next.Shared`](https://www.nuget.org/packages/Forge.Next.Shared), [`SoapFormatter`](https://www.nuget.org/packages/SoapFormatter)
+- **Repository:** <https://github.com/JZO001/Forge.Next.Formatters>
 
 ---
 
@@ -17,11 +19,15 @@ one small, predictable, `async` contract and never throws for expected failures 
 - [Why this library](#why-this-library)
 - [Core concepts](#core-concepts)
   - [The `IDataFormatter<T>` contract](#the-idataformattert-contract)
+  - [The `ICryptoFormatter<T>` contract](#the-icryptoformattert-contract)
   - [Working with `ErrorOr<T>` results](#working-with-erroror-results)
   - [A note about streams and `Position`](#a-note-about-streams-and-position)
+  - [A note about `BufferSize`](#a-note-about-buffersize)
+- [Interfaces](#interfaces)
 - [Classes and public members](#classes-and-public-members)
   - [`Consts`](#consts)
-  - [`GZipFormatter`](#gzipformatter)
+  - [`GZipByteArrayFormatter`](#gzipbytearrayformatter)
+  - [`GZipStreamFormatter`](#gzipstreamformatter)
   - [`BrotliByteArrayFormatter`](#brotlibytearrayformatter)
   - [`BrotliStreamFormatter`](#brotlistreamformatter)
   - [`XmlDataFormatter<T>`](#xmldataformattert)
@@ -63,7 +69,8 @@ formatter you have learned them all. The differences are only:
 
 | Formatter | Payload type `T` | What it does |
 |-----------|------------------|--------------|
-| `GZipFormatter` | `byte[]` | GZip compression / decompression |
+| `GZipByteArrayFormatter` | `byte[]` | GZip compression / decompression |
+| `GZipStreamFormatter` | `Stream` | GZip compression / decompression |
 | `BrotliByteArrayFormatter` | `byte[]` | Brotli compression / decompression |
 | `BrotliStreamFormatter` | `Stream` | Brotli compression / decompression |
 | `XmlDataFormatter<T>` | `T` | XML serialization via `XmlSerializer` |
@@ -73,6 +80,13 @@ formatter you have learned them all. The differences are only:
 
 All operations are asynchronous and return an `ErrorOr<...>` value, so failures (a `null`
 argument, a corrupt payload, a wrong key, …) are surfaced as data instead of exceptions.
+
+There are two shapes of every formatter:
+
+- **`...ByteArrayFormatter`** — the payload is an in-memory `byte[]`. Convenient when the whole
+  payload comfortably fits in memory.
+- **`...StreamFormatter`** — the payload is a `Stream`. Convenient for larger payloads and for
+  wiring formatters together without materializing an intermediate `byte[]`.
 
 ---
 
@@ -107,6 +121,24 @@ Interpretation depends on the formatter:
 > implemented** and always returns a `Forbidden` error with the description
 > `"Method not implemented."`.
 
+### The `ICryptoFormatter<T>` contract
+
+The AES formatters implement `ICryptoFormatter<T>`, which extends `IDataFormatter<T>` with the
+cryptographic configuration surface:
+
+```csharp
+public interface ICryptoFormatter<T> : IDataFormatter<T>
+{
+    int BufferSize { get; set; }               // read/write chunk size
+    X509Certificate2? Certificate { get; set; } // derives IV + Key when set
+    byte[] IV { get; set; }                    // 16-byte initialization vector
+    byte[] Key { get; set; }                   // 32-byte (AES-256) key
+}
+```
+
+These members are implemented once in [`CryptoFormatterBase<T>`](#cryptoformatterbaset) and inherited
+by `AesByteArrayFormatter` and `AesStreamFormatter`.
+
 ### Working with `ErrorOr<T>` results
 
 None of the public methods throw for an *expected* failure. Instead they return an
@@ -137,16 +169,21 @@ The library produces three kinds of errors:
 
 | Error type | When |
 |------------|------|
-| `Validation` | An argument was `null`, or (for `GZipFormatter.ReadAsync`) `BufferSize <= 0`. The `Description` is the offending parameter name, e.g. `"inputStream"`. |
+| `Validation` | An argument was `null`, or `BufferSize <= 0`. The `Description` is the offending parameter name, e.g. `"inputStream"` or `"BufferSize"`. |
 | `Forbidden` | The unimplemented `ReadAsync(inputStream, outputStream)` overload of the serialization formatters. `Description` is `"Method not implemented."`. |
 | *(failure)* | Any exception raised inside the operation (corrupt data, a non-readable stream, a wrong AES key, …) is caught and returned as an errored result — `IsError` is `true` — instead of propagating. |
+
+Internally the "catch every exception and turn it into an errored result" behavior is provided by
+the `ProtectAsync` wrapper from `Forge.Next.Shared`, which every operation runs inside. You never
+call it directly; it is the reason a corrupt payload becomes `result.IsError == true` rather than a
+thrown exception.
 
 ### A note about streams and `Position`
 
 The **single-stream** read overloads that return a `Stream`
-(`BrotliStreamFormatter.ReadAsync` and `AesStreamFormatter.ReadAsync`) hand you back a
-`MemoryStream` that is positioned at **the end** of the data it just produced. Rewind it before
-reading:
+(`GZipStreamFormatter.ReadAsync`, `BrotliStreamFormatter.ReadAsync` and
+`AesStreamFormatter.ReadAsync`) hand you back a `MemoryStream` that is positioned at **the end** of
+the data it just produced. Rewind it before reading:
 
 ```csharp
 ErrorOr<Stream?> result = await formatter.ReadAsync(input);
@@ -156,6 +193,38 @@ output.Position = 0;          // <-- rewind before reading
 
 Likewise, after `WriteAsync` fills a `MemoryStream` you must rewind it (`Position = 0`) before you
 pass it to a `ReadAsync` call.
+
+### A note about `BufferSize`
+
+Every formatter exposes an `int BufferSize` property (default `Consts.DefaultBufferSize` = `8192`
+bytes) that controls the chunk size used while streaming. When an operation reads or writes in
+chunks it first validates `BufferSize > 0`; a non-positive value produces a `Validation` error
+whose `Description` is `"BufferSize"`.
+
+The only exception is `GZipByteArrayFormatter.WriteAsync`, which writes the supplied `byte[]` to the
+GZip stream in a single call and therefore does not consult `BufferSize`.
+
+---
+
+## Interfaces
+
+Every concrete formatter is registered and injected through an interface. The full hierarchy:
+
+| Interface | Extends | Adds | Implemented by |
+|-----------|---------|------|----------------|
+| `IDataFormatter<T>` | — | `ReadAsync` (×2), `WriteAsync` | *(all formatters)* |
+| `ICryptoFormatter<T>` | `IDataFormatter<T>` | `BufferSize`, `Certificate`, `IV`, `Key` | `CryptoFormatterBase<T>` |
+| `IGZipByteArrayFormatter` | `IDataFormatter<byte[]>` | `BufferSize` | `GZipByteArrayFormatter` |
+| `IGZipStreamFormatter` | `IDataFormatter<Stream>` | `BufferSize` | `GZipStreamFormatter` |
+| `IBrotliByteArrayFormatter` | `IDataFormatter<byte[]>` | `BufferSize` | `BrotliByteArrayFormatter` |
+| `IBrotliStreamFormatter` | `IDataFormatter<Stream>` | `BufferSize` | `BrotliStreamFormatter` |
+| `IXmlDataFormatter<T>` | `IDataFormatter<T>` | `Encoding` | `XmlDataFormatter<T>` |
+| `IXmlSoapFormatter<T>` | `IDataFormatter<T>` | — | `XmlSoapFormatter<T>` |
+| `IAesByteArrayFormatter` | `ICryptoFormatter<byte[]>` | — | `AesByteArrayFormatter` |
+| `IAesStreamFormatter` | `ICryptoFormatter<Stream>` | — | `AesStreamFormatter` |
+
+Program against the interfaces (they are what [`AddForgeFormatters`](#servicecollectionextensions)
+registers) and let the container hand you the concrete implementation.
 
 ---
 
@@ -172,16 +241,17 @@ Static class holding the constants shared by the formatters.
 | `Consts.LengthOfKey` | `32` | Required AES key length in bytes (256 bits → AES-256). |
 
 ```csharp
-int buffer = Consts.DefaultBufferSize; // 8192
+int buffer = Consts.DefaultBufferSize;     // 8192
 byte[] iv  = new byte[Consts.LengthOfIV];  // 16 bytes
 byte[] key = new byte[Consts.LengthOfKey]; // 32 bytes
 ```
 
 ---
 
-### `GZipFormatter`
+### `GZipByteArrayFormatter`
 
-Compresses / decompresses a `byte[]` using GZip. Implements `IGZipFormatter : IDataFormatter<byte[]>`.
+Compresses / decompresses a `byte[]` using GZip. Implements
+`IGZipByteArrayFormatter : IDataFormatter<byte[]>`.
 
 **Public members**
 
@@ -190,9 +260,6 @@ Compresses / decompresses a `byte[]` using GZip. Implements `IGZipFormatter : ID
 - `Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken)` — decompress the stream into `outputStream`.
 - `Task<ErrorOr<Success>> WriteAsync(byte[] data, Stream outputStream, CancellationToken)` — compress `data` into `outputStream`.
 
-> `GZipFormatter.ReadAsync(inputStream, …)` also validates `BufferSize`: if it is `<= 0` you get a
-> `Validation` error with description `"BufferSize"`.
-
 **Example — compress and decompress a byte array**
 
 ```csharp
@@ -200,7 +267,7 @@ using Forge.Next.Formatters;
 using ErrorOr;
 using System.Text;
 
-var formatter = new GZipFormatter
+var formatter = new GZipByteArrayFormatter
 {
     BufferSize = 16 * 1024 // optional: override the 8 KB default
 };
@@ -229,6 +296,45 @@ if (!result.IsError)
 {
     byte[] restored = destination.ToArray();
 }
+```
+
+---
+
+### `GZipStreamFormatter`
+
+Compresses / decompresses a `Stream` using GZip. Implements
+`IGZipStreamFormatter : IDataFormatter<Stream>`.
+
+**Public members**
+
+- `int BufferSize { get; set; }` — chunk size (default `8192`).
+- `Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken)` — decompress and return a `Stream` (positioned at the end — rewind before reading).
+- `Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken)` — decompress into `outputStream`.
+- `Task<ErrorOr<Success>> WriteAsync(Stream data, Stream outputStream, CancellationToken)` — compress the `data` stream into `outputStream`.
+
+**Example**
+
+```csharp
+using Forge.Next.Formatters;
+using ErrorOr;
+using System.Text;
+
+var formatter = new GZipStreamFormatter();
+
+using var source = new MemoryStream(Encoding.UTF8.GetBytes("payload to compress"));
+using var compressed = new MemoryStream();
+
+// Compress the source stream into `compressed`
+await formatter.WriteAsync(source, compressed);
+
+// Decompress: the returned stream is positioned at its END
+compressed.Position = 0;
+ErrorOr<Stream?> read = await formatter.ReadAsync(compressed);
+
+Stream decompressed = read.Value!;
+decompressed.Position = 0;                       // rewind!
+using var reader = new StreamReader(decompressed);
+string text = await reader.ReadToEndAsync();     // "payload to compress"
 ```
 
 ---
@@ -420,7 +526,7 @@ everything below.
 
 **Constructors** (all `protected`, exposed through the derived AES formatters)
 
-- `CryptoFormatterBase()` — generates a cryptographically random IV (16 bytes) and key (32 bytes).
+- `CryptoFormatterBase()` — generates a random IV (16 bytes) and key (32 bytes) via `Random.Shared`.
 - `CryptoFormatterBase(X509Certificate2 certificate)` — derives the IV and key from the
   certificate's public key. Throws `ArgumentNullException` if `certificate` is `null`.
 - `CryptoFormatterBase(byte[] iv, byte[] key)` — uses the supplied IV and key. Throws
@@ -436,6 +542,12 @@ everything below.
   for `null` and `InvalidDataException` when the length is not exactly `Consts.LengthOfIV` (16).
 - `byte[] Key { get; set; }` — 32-byte key. The setter throws `ArgumentNullException` for `null` and
   `InvalidDataException` when the length is not exactly `Consts.LengthOfKey` (32).
+
+**Abstract members** (implemented by the concrete AES formatters)
+
+- `Task<ErrorOr<T?>> ReadAsync(Stream inputStream, CancellationToken)` — decrypt into `T`.
+- `Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken)` — decrypt into `outputStream`.
+- `Task<ErrorOr<Success>> WriteAsync(T data, Stream outputStream, CancellationToken)` — encrypt `data` into `outputStream`.
 
 **Example — reading and validating the crypto configuration** (via `AesByteArrayFormatter`)
 
@@ -562,16 +674,17 @@ string message = await reader.ReadToEndAsync(); // "stream secret"
 
 ### `ServiceCollectionExtensions`
 
-Registers every formatter with the Microsoft dependency-injection container.
+Registers the formatters with the Microsoft dependency-injection container.
 
 **Public member**
 
-- `IServiceCollection AddForgeFormatters(this IServiceCollection services)` — registers all
-  formatters and returns the same collection (so calls can be chained). Registrations:
+- `IServiceCollection AddForgeFormatters(this IServiceCollection services)` — registers the
+  formatters below and returns the same collection (so calls can be chained). Registrations:
 
   | Service | Implementation | Lifetime |
   |---------|----------------|----------|
-  | `IGZipFormatter` | `GZipFormatter` | Singleton |
+  | `IGZipByteArrayFormatter` | `GZipByteArrayFormatter` | Singleton |
+  | `IGZipStreamFormatter` | `GZipStreamFormatter` | Singleton |
   | `IXmlDataFormatter<>` | `XmlDataFormatter<>` | Singleton |
   | `IBrotliStreamFormatter` | `BrotliStreamFormatter` | Singleton |
   | `IBrotliByteArrayFormatter` | `BrotliByteArrayFormatter` | Singleton |
@@ -588,7 +701,7 @@ services.AddForgeFormatters();
 
 using var provider = services.BuildServiceProvider();
 
-var gzip = provider.GetRequiredService<IGZipFormatter>();
+var gzip = provider.GetRequiredService<IGZipByteArrayFormatter>();
 var xml  = provider.GetRequiredService<IXmlDataFormatter<Person>>();
 ```
 
@@ -612,11 +725,11 @@ var app = builder.Build();
 ```csharp
 public sealed class ArchiveService
 {
-    private readonly IGZipFormatter _gzip;
+    private readonly IGZipByteArrayFormatter _gzip;
     private readonly IAesByteArrayFormatter _aes;
 
     // The formatters are injected by the container.
-    public ArchiveService(IGZipFormatter gzip, IAesByteArrayFormatter aes)
+    public ArchiveService(IGZipByteArrayFormatter gzip, IAesByteArrayFormatter aes)
     {
         _gzip = gzip;
         _aes = aes;
@@ -657,7 +770,7 @@ byte[] key = new byte[32];
 Random.Shared.NextBytes(iv);
 Random.Shared.NextBytes(key);
 
-var gzip = new GZipFormatter();
+var gzip = new GZipByteArrayFormatter();
 var aes  = new AesByteArrayFormatter(iv, key);
 
 byte[] payload = Encoding.UTF8.GetBytes(new string('X', 10_000));
@@ -717,7 +830,7 @@ Every method returns an `ErrorOr<...>`; inspect it instead of catching exception
 using Forge.Next.Formatters;
 using ErrorOr;
 
-var formatter = new GZipFormatter();
+var formatter = new GZipByteArrayFormatter();
 
 // null argument -> Validation error, Description = parameter name
 ErrorOr<Success> nullData = await formatter.WriteAsync(null!, new MemoryStream());
@@ -725,7 +838,7 @@ ErrorOr<Success> nullData = await formatter.WriteAsync(null!, new MemoryStream()
 // nullData.FirstError.Type == ErrorType.Validation
 // nullData.FirstError.Description == "data"
 
-// BufferSize <= 0 (GZipFormatter.ReadAsync only) -> Validation error
+// BufferSize <= 0 (on chunked reads/writes) -> Validation error
 formatter.BufferSize = 0;
 ErrorOr<byte[]?> badBuffer = await formatter.ReadAsync(new MemoryStream(new byte[] { 1, 2, 3 }));
 // badBuffer.FirstError.Description == "BufferSize"

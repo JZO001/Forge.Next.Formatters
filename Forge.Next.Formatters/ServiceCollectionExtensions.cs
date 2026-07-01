@@ -16,7 +16,8 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddForgeFormatters(this IServiceCollection services)
     {
         return services
-            .AddSingleton<IGZipFormatter, GZipFormatter>()
+            .AddSingleton<IGZipByteArrayFormatter, GZipByteArrayFormatter>()
+            .AddSingleton<IGZipStreamFormatter, GZipStreamFormatter>()
             .AddSingleton(typeof(IXmlDataFormatter<>), typeof(XmlDataFormatter<>))
             .AddSingleton<IBrotliStreamFormatter, BrotliStreamFormatter>()
             .AddSingleton<IBrotliByteArrayFormatter, BrotliByteArrayFormatter>()
