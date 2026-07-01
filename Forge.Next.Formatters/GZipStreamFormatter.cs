@@ -34,12 +34,12 @@ public class GZipStreamFormatter : IGZipStreamFormatter
             int numRead = 0;
             MemoryStream ms = new();
 
-            while ((numRead = await gzipStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) != 0)
+            while ((numRead = await gzipStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
             {
-                await ms.WriteAsync(buffer, 0, numRead, cancellationToken);
+                await ms.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
             }
 
-            await gzipStream.FlushAsync(cancellationToken);
+            await gzipStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             return ms;
         });
@@ -64,12 +64,12 @@ public class GZipStreamFormatter : IGZipStreamFormatter
             byte[] buffer = new byte[BufferSize];
             int numRead = 0;
 
-            while ((numRead = await gzipStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) != 0)
+            while ((numRead = await gzipStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
             {
-                await outputStream.WriteAsync(buffer, 0, numRead, cancellationToken);
+                await outputStream.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
             }
 
-            await gzipStream.FlushAsync(cancellationToken);
+            await gzipStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             return Result.Success;
         });
@@ -95,12 +95,12 @@ public class GZipStreamFormatter : IGZipStreamFormatter
             byte[] buffer = new byte[BufferSize];
             int numRead = 0;
 
-            while ((numRead = await data.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) != 0)
+            while ((numRead = await data.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
             {
-                await gzipStream.WriteAsync(buffer, 0, numRead, cancellationToken);
+                await gzipStream.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
             }
 
-            await gzipStream.FlushAsync(cancellationToken);
+            await gzipStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             return Result.Success;
         });

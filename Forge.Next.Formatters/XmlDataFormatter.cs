@@ -63,7 +63,7 @@ public class XmlDataFormatter<T> : IXmlDataFormatter<T>
             using StreamWriter sw = new StreamWriter(outputStream, encoding: Encoding, leaveOpen: true);
 
             new XmlSerializer(typeof(T)).Serialize(sw, data);
-            await sw.FlushAsync(cancellationToken);
+            await sw.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             return Result.Success;
         });

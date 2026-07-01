@@ -13,7 +13,26 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The IServiceCollection to add the formatters to.</param>
     /// <returns>The IServiceCollection with the added formatters.</returns>
-    public static IServiceCollection AddForgeFormatters(this IServiceCollection services)
+    public static IServiceCollection AddForgeFormattersAsScoped(this IServiceCollection services)
+    {
+        return services
+            .AddScoped<IGZipByteArrayFormatter, GZipByteArrayFormatter>()
+            .AddScoped<IGZipStreamFormatter, GZipStreamFormatter>()
+            .AddScoped(typeof(IXmlDataFormatter<>), typeof(XmlDataFormatter<>))
+            .AddScoped<IBrotliStreamFormatter, BrotliStreamFormatter>()
+            .AddScoped<IBrotliByteArrayFormatter, BrotliByteArrayFormatter>()
+            .AddScoped<IAesByteArrayFormatter, AesByteArrayFormatter>()
+            .AddScoped<IAesStreamFormatter, AesStreamFormatter>()
+            .AddScoped(typeof(ISystemJsonFormatter<>), typeof(SystemJsonFormatter<>))
+            .AddTransient(typeof(IXmlSoapFormatter<>), typeof(XmlSoapFormatter<>));
+    }
+
+    /// <summary>
+    /// Adds Forge formatters to the IServiceCollection for dependency injection as singletons.
+    /// </summary>
+    /// <param name="services">The IServiceCollection to add the formatters to.</param>
+    /// <returns>The IServiceCollection with the added formatters.</returns>
+    public static IServiceCollection AddForgeFormattersAsSingleton(this IServiceCollection services)
     {
         return services
             .AddSingleton<IGZipByteArrayFormatter, GZipByteArrayFormatter>()
@@ -21,8 +40,9 @@ public static class ServiceCollectionExtensions
             .AddSingleton(typeof(IXmlDataFormatter<>), typeof(XmlDataFormatter<>))
             .AddSingleton<IBrotliStreamFormatter, BrotliStreamFormatter>()
             .AddSingleton<IBrotliByteArrayFormatter, BrotliByteArrayFormatter>()
-            .AddScoped<IAesByteArrayFormatter, AesByteArrayFormatter>()
-            .AddScoped<IAesStreamFormatter, AesStreamFormatter>()
+            .AddSingleton<IAesByteArrayFormatter, AesByteArrayFormatter>()
+            .AddSingleton<IAesStreamFormatter, AesStreamFormatter>()
+            .AddSingleton(typeof(ISystemJsonFormatter<>), typeof(SystemJsonFormatter<>))
             .AddTransient(typeof(IXmlSoapFormatter<>), typeof(XmlSoapFormatter<>));
     }
 

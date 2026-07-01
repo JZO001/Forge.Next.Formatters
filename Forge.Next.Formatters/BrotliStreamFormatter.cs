@@ -36,15 +36,15 @@ public class BrotliStreamFormatter : IBrotliStreamFormatter
 
             try
             {
-                while ((numRead = brotliStream.Read(buffer, 0, buffer.Length)) != 0)
+                while ((numRead = await brotliStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
                 {
-                    ms.Write(buffer, 0, numRead);
+                    await ms.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
                 }
             }
             catch
             {
                 ms.SetLength(0);
-                await ms.DisposeAsync();
+                await ms.DisposeAsync().ConfigureAwait(false);
                 throw;
             }
 
@@ -72,9 +72,9 @@ public class BrotliStreamFormatter : IBrotliStreamFormatter
             byte[] buffer = new byte[BufferSize];
             int numRead = 0;
 
-            while ((numRead = brotliStream.Read(buffer, 0, buffer.Length)) != 0)
+            while ((numRead = await brotliStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
             {
-                outputStream.Write(buffer, 0, numRead);
+                await outputStream.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
             }
 
             return Result.Success;
@@ -101,12 +101,12 @@ public class BrotliStreamFormatter : IBrotliStreamFormatter
             byte[] buffer = new byte[BufferSize];
             int numRead = 0;
 
-            while ((numRead = data.Read(buffer, 0, buffer.Length)) != 0)
+            while ((numRead = await data.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
             {
-                brotliStream.Write(buffer, 0, numRead);
+                await brotliStream.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
             }
 
-            brotliStream.Flush();
+            await brotliStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             return Result.Success;
         });

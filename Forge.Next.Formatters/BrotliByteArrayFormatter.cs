@@ -34,9 +34,9 @@ public class BrotliByteArrayFormatter : IBrotliByteArrayFormatter
             byte[] buffer = new byte[BufferSize];
             int numRead = 0;
 
-            while ((numRead = brotliStream.Read(buffer, 0, buffer.Length)) != 0)
+            while ((numRead = await brotliStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
             {
-                ms.Write(buffer, 0, numRead);
+                await ms.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
             }
 
             return ms.ToArray();
@@ -63,9 +63,9 @@ public class BrotliByteArrayFormatter : IBrotliByteArrayFormatter
             byte[] buffer = new byte[BufferSize];
             int numRead = 0;
 
-            while ((numRead = brotliStream.Read(buffer, 0, buffer.Length)) != 0)
+            while ((numRead = await brotliStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
             {
-                outputStream.Write(buffer, 0, numRead);
+                await outputStream.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
             }
 
             return Result.Success;
@@ -95,12 +95,12 @@ public class BrotliByteArrayFormatter : IBrotliByteArrayFormatter
             byte[] buffer = new byte[BufferSize];
             int numRead = 0;
 
-            while ((numRead = ms.Read(buffer, 0, buffer.Length)) != 0)
+            while ((numRead = await ms.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
             {
-                brotliStream.Write(buffer, 0, numRead);
+                await brotliStream.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
             }
 
-            brotliStream.Flush();
+            await brotliStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             ms.SetLength(0);
 

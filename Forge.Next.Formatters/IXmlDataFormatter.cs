@@ -5,7 +5,7 @@ namespace Forge.Next.Formatters;
 /// <summary>
 /// Interface for IXmlDataFormatter
 /// </summary>
-/// <typeparam name="T"></typeparam>
+/// <typeparam name="T">The type of object to be serialized and deserialized.</typeparam>
 public interface IXmlDataFormatter<T> : IDataFormatter<T>
 {
 
