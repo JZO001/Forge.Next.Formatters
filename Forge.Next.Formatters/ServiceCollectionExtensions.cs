@@ -13,6 +13,27 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="services">The IServiceCollection to add the formatters to.</param>
     /// <returns>The IServiceCollection with the added formatters.</returns>
+    public static IServiceCollection AddForgeFormattersAsTransient(this IServiceCollection services)
+    {
+        return services
+            .AddTransient<IGZipByteArrayFormatter, GZipByteArrayFormatter>()
+            .AddTransient<IGZipStreamFormatter, GZipStreamFormatter>()
+            .AddTransient(typeof(IXmlDataFormatter<>), typeof(XmlDataFormatter<>))
+#if NETCOREAPP
+            .AddTransient<IBrotliStreamFormatter, BrotliStreamFormatter>()
+            .AddTransient<IBrotliByteArrayFormatter, BrotliByteArrayFormatter>()
+#endif
+            .AddTransient<IAesByteArrayFormatter, AesByteArrayFormatter>()
+            .AddTransient<IAesStreamFormatter, AesStreamFormatter>()
+            .AddTransient(typeof(ISystemJsonFormatter<>), typeof(SystemJsonFormatter<>))
+            .AddTransient(typeof(IXmlSoapFormatter<>), typeof(XmlSoapFormatter<>));
+    }
+
+    /// <summary>
+    /// Adds Forge formatters to the IServiceCollection for dependency injection.
+    /// </summary>
+    /// <param name="services">The IServiceCollection to add the formatters to.</param>
+    /// <returns>The IServiceCollection with the added formatters.</returns>
     public static IServiceCollection AddForgeFormattersAsScoped(this IServiceCollection services)
     {
         return services
