@@ -1,4 +1,6 @@
-﻿using ErrorOr;
+﻿#if NETCOREAPP
+
+using ErrorOr;
 using Forge.Next.Shared;
 using System.IO.Compression;
 
@@ -109,3 +111,5 @@ public class BrotliByteArrayFormatter : IBrotliByteArrayFormatter
     }
 
 }
+
+#endif

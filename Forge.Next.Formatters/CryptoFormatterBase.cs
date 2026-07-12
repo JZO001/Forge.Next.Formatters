@@ -30,8 +30,14 @@ public abstract class CryptoFormatterBase<T> : ICryptoFormatter<T>
     /// </summary>
     protected CryptoFormatterBase()
     {
+#if NETCOREAPP
         Random.Shared.NextBytes(_IV);
         Random.Shared.NextBytes(_key);
+#else
+        Random random = new Random();
+        random.NextBytes(_IV);
+        random.NextBytes(_key);
+#endif
     }
 
     /// <summary>

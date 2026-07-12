@@ -19,8 +19,10 @@ public static class ServiceCollectionExtensions
             .AddScoped<IGZipByteArrayFormatter, GZipByteArrayFormatter>()
             .AddScoped<IGZipStreamFormatter, GZipStreamFormatter>()
             .AddScoped(typeof(IXmlDataFormatter<>), typeof(XmlDataFormatter<>))
+#if NETCOREAPP
             .AddScoped<IBrotliStreamFormatter, BrotliStreamFormatter>()
             .AddScoped<IBrotliByteArrayFormatter, BrotliByteArrayFormatter>()
+#endif
             .AddScoped<IAesByteArrayFormatter, AesByteArrayFormatter>()
             .AddScoped<IAesStreamFormatter, AesStreamFormatter>()
             .AddScoped(typeof(ISystemJsonFormatter<>), typeof(SystemJsonFormatter<>))
@@ -38,8 +40,10 @@ public static class ServiceCollectionExtensions
             .AddSingleton<IGZipByteArrayFormatter, GZipByteArrayFormatter>()
             .AddSingleton<IGZipStreamFormatter, GZipStreamFormatter>()
             .AddSingleton(typeof(IXmlDataFormatter<>), typeof(XmlDataFormatter<>))
+#if NETCOREAPP
             .AddSingleton<IBrotliStreamFormatter, BrotliStreamFormatter>()
             .AddSingleton<IBrotliByteArrayFormatter, BrotliByteArrayFormatter>()
+#endif
             .AddSingleton<IAesByteArrayFormatter, AesByteArrayFormatter>()
             .AddSingleton<IAesStreamFormatter, AesStreamFormatter>()
             .AddSingleton(typeof(ISystemJsonFormatter<>), typeof(SystemJsonFormatter<>))

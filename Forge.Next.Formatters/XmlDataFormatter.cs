@@ -29,7 +29,7 @@ public class XmlDataFormatter<T> : IXmlDataFormatter<T>
 
         return this.ProtectAsync<XmlDataFormatter<T>, T?>(async (_, _) =>
         {
-            using StreamReader sr = new StreamReader(inputStream, encoding: Encoding, leaveOpen: true);
+            using StreamReader sr = new StreamReader(inputStream, Encoding, detectEncodingFromByteOrderMarks: true, bufferSize: Consts.DefaultBufferSize, leaveOpen: true);
             return (T?)new XmlSerializer(typeof(T)).Deserialize(sr);
         });
     }
@@ -60,10 +60,13 @@ public class XmlDataFormatter<T> : IXmlDataFormatter<T>
 
         return this.ProtectAsync<XmlDataFormatter<T>, Success>(async (_, _) =>
         {
-            using StreamWriter sw = new StreamWriter(outputStream, encoding: Encoding, leaveOpen: true);
-
+            using StreamWriter sw = new StreamWriter(outputStream, encoding: Encoding, bufferSize: Consts.DefaultBufferSize, leaveOpen: true);
             new XmlSerializer(typeof(T)).Serialize(sw, data);
+#if NETCOREAPP
             await sw.FlushAsync(cancellationToken).ConfigureAwait(false);
+#else
+            await sw.FlushAsync().ConfigureAwait(false);
+#endif
 
             return Result.Success;
         });

@@ -134,7 +134,11 @@ public class AesByteArrayFormatter : CryptoFormatterBase<byte[]>, IAesByteArrayF
             {
                 await csEncrypt.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
             }
+#if NETCOREAPP
             await csEncrypt.FlushFinalBlockAsync(cancellationToken).ConfigureAwait(false);
+#else
+            csEncrypt.FlushFinalBlock();
+#endif
 
             ms.SetLength(0);
 

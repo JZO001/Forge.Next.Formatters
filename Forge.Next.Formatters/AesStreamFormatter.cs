@@ -69,7 +69,11 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
             catch
             {
                 ms.SetLength(0);
+#if NETCOREAPP
                 await ms.DisposeAsync().ConfigureAwait(false);
+#else
+                ms.Dispose();
+#endif
                 throw;
             }
 
@@ -140,7 +144,11 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
             {
                 await csEncrypt.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
             }
+#if NETCOREAPP
             await csEncrypt.FlushFinalBlockAsync(cancellationToken).ConfigureAwait(false);
+#else
+            csEncrypt.FlushFinalBlock();
+#endif
 
             return Result.Success;
         });
