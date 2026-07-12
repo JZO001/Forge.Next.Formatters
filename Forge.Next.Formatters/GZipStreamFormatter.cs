@@ -41,6 +41,8 @@ public class GZipStreamFormatter : IGZipStreamFormatter
 
             await gzipStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
+            ms.Position = 0; // the caller receives a readable stream, not one parked at the end
+
             return ms;
         });
     }

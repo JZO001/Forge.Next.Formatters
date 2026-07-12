@@ -18,7 +18,7 @@ public static class DataFormatterExtensions
     /// <param name="decompress">A flag indicating whether the data should be decompressed. Default is true.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous read operation. The task result contains the read data or an error.</returns>
-    public static Task<ErrorOr<T?>> Read<T>(
+    public static Task<ErrorOr<T?>> ReadAsync<T>(
         this IDataFormatter<T> formatter,
         FileInfo file,
         bool decompress = true,
@@ -27,11 +27,11 @@ public static class DataFormatterExtensions
         if (formatter is null) return Task.FromResult((ErrorOr<T?>)Error.Validation(description: nameof(formatter)));
         if (file is null) return Task.FromResult((ErrorOr<T?>)Error.Validation(description: nameof(file)));
 
-        return typeof(DataFormatterExtensions).ProtectAsync((_, _) =>
+        return typeof(DataFormatterExtensions).ProtectAsync(async (_, _) =>
         {
             using FileStream fs = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read);
 
-            return Read(formatter, fs, decompress, cancellationToken);
+            return await ReadAsync(formatter, fs, decompress, cancellationToken).ConfigureAwait(false);
         });
     }
 
@@ -44,23 +44,28 @@ public static class DataFormatterExtensions
     /// <param name="decompress">A flag indicating whether the data should be decompressed. Default is true.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous read operation. The task result contains the read data or an error.</returns>
-    public static Task<ErrorOr<T?>> Read<T>(
+    public static async Task<ErrorOr<T?>> ReadAsync<T>(
         this IDataFormatter<T> formatter,
         Stream stream,
         bool decompress = true,
         CancellationToken cancellationToken = default)
     {
-        if (formatter is null) return Task.FromResult((ErrorOr<T?>)Error.Validation(description: nameof(formatter)));
-        if (stream is null) return Task.FromResult((ErrorOr<T?>)Error.Validation(description: nameof(stream)));
+        if (formatter is null) return Error.Validation(description: nameof(formatter));
+        if (stream is null) return Error.Validation(description: nameof(stream));
 
         if (decompress)
         {
-            return new GZipStreamFormatter()
-                .ReadAsync(stream, cancellationToken)
-                .ThenAsync(decompressedStream => formatter.ReadAsync(decompressedStream!, cancellationToken));
+            ErrorOr<Stream?> decompressed = await new GZipStreamFormatter().ReadAsync(stream, cancellationToken).ConfigureAwait(false);
+
+            if (decompressed.IsError) return decompressed.Errors;
+
+            // The decompressed stream is ours, so it is ours to dispose once the formatter has read it.
+            using Stream decompressedStream = decompressed.Value!;
+
+            return await formatter.ReadAsync(decompressedStream, cancellationToken).ConfigureAwait(false);
         }
 
-        return formatter.ReadAsync(stream, cancellationToken);
+        return await formatter.ReadAsync(stream, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -73,7 +78,7 @@ public static class DataFormatterExtensions
     /// <param name="compress">A flag indicating whether the data should be compressed. Default is true.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous write operation. The task result contains a success indicator or an error.</returns>
-    public static Task<ErrorOr<Success>> Write<T>(
+    public static Task<ErrorOr<Success>> WriteAsync<T>(
         this IDataFormatter<T> formatter,
         T data,
         FileInfo file,
@@ -84,11 +89,11 @@ public static class DataFormatterExtensions
         if (data is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(data)));
         if (file is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(file)));
 
-        return typeof(DataFormatterExtensions).ProtectAsync((_, _) =>
+        return typeof(DataFormatterExtensions).ProtectAsync(async (_, _) =>
         {
             using FileStream fs = new FileStream(file.FullName, FileMode.Create, FileAccess.Write, FileShare.Read);
 
-            return Write(formatter, data, fs, compress, cancellationToken);
+            return await WriteAsync(formatter, data, fs, compress, cancellationToken).ConfigureAwait(false);
         });
     }
 
@@ -102,28 +107,33 @@ public static class DataFormatterExtensions
     /// <param name="compress">A flag indicating whether the data should be compressed. Default is true.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous write operation. The task result contains a success indicator or an error.</returns>
-    public static Task<ErrorOr<Success>> Write<T>(
+    public static async Task<ErrorOr<Success>> WriteAsync<T>(
         this IDataFormatter<T> formatter,
         T data,
         Stream stream,
         bool compress = true,
         CancellationToken cancellationToken = default)
     {
-        if (formatter is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(formatter)));
-        if (data is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(data)));
-        if (stream is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(stream)));
+        if (formatter is null) return Error.Validation(description: nameof(formatter));
+        if (data is null) return Error.Validation(description: nameof(data));
+        if (stream is null) return Error.Validation(description: nameof(stream));
 
         if (compress)
         {
+            // Must stay awaited inside the using: a task chain built here would let ms be disposed
+            // before the GZip layer ever reads from it.
             using MemoryStream ms = new MemoryStream();
 
-            return formatter
-                .WriteAsync(data, ms, cancellationToken)
-                .ThenDo(_ => ms.Position = 0)
-                .ThenAsync(_ => new GZipStreamFormatter().WriteAsync(ms, stream, cancellationToken));
+            ErrorOr<Success> serialized = await formatter.WriteAsync(data, ms, cancellationToken).ConfigureAwait(false);
+
+            if (serialized.IsError) return serialized;
+
+            ms.Position = 0;
+
+            return await new GZipStreamFormatter().WriteAsync(ms, stream, cancellationToken).ConfigureAwait(false);
         }
 
-        return formatter.WriteAsync(data, stream, cancellationToken);
+        return await formatter.WriteAsync(data, stream, cancellationToken).ConfigureAwait(false);
     }
 
 }

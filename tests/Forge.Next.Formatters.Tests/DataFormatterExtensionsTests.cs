@@ -24,7 +24,7 @@ public class FormatterExtSample
 }
 
 /// <summary>
-/// Unit tests for <see cref="DataFormatterExtensions"/>, the <c>Read</c>/<c>Write</c> convenience
+/// Unit tests for <see cref="DataFormatterExtensions"/>, the <c>ReadAsync</c>/<c>WriteAsync</c> convenience
 /// extension methods on <see cref="IDataFormatter{T}"/>. These add file access and an optional GZip
 /// compression layer on top of any formatter.
 /// <para>
@@ -42,11 +42,11 @@ public class FormatterExtSample
 public class DataFormatterExtensionsTests
 {
     // ------------------------------------------------------------------
-    // Argument validation — Read
+    // Argument validation — ReadAsync
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// <c>Read(stream)</c> with a null formatter returns a validation error naming "formatter".
+    /// <c>ReadAsync(stream)</c> with a null formatter returns a validation error naming "formatter".
     /// </summary>
     [Fact]
     public async Task Read_NullFormatterWithStream_ReturnsValidationError_Test()
@@ -56,7 +56,7 @@ public class DataFormatterExtensionsTests
         using MemoryStream stream = new MemoryStream();
 
         // Act
-        ErrorOr<FormatterExtSample?> result = await formatter.Read(stream);
+        ErrorOr<FormatterExtSample?> result = await DataFormatterExtensions.ReadAsync(formatter, stream);
 
         // Assert
         Assert.True(result.IsError);
@@ -65,7 +65,7 @@ public class DataFormatterExtensionsTests
     }
 
     /// <summary>
-    /// <c>Read(stream)</c> with a null stream returns a validation error naming "stream".
+    /// <c>ReadAsync(stream)</c> with a null stream returns a validation error naming "stream".
     /// </summary>
     [Fact]
     public async Task Read_NullStream_ReturnsValidationError_Test()
@@ -74,7 +74,7 @@ public class DataFormatterExtensionsTests
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
 
         // Act
-        ErrorOr<FormatterExtSample?> result = await formatter.Read((Stream)null!);
+        ErrorOr<FormatterExtSample?> result = await DataFormatterExtensions.ReadAsync(formatter, (Stream)null!);
 
         // Assert
         Assert.True(result.IsError);
@@ -83,7 +83,7 @@ public class DataFormatterExtensionsTests
     }
 
     /// <summary>
-    /// <c>Read(file)</c> with a null formatter returns a validation error naming "formatter".
+    /// <c>ReadAsync(file)</c> with a null formatter returns a validation error naming "formatter".
     /// </summary>
     [Fact]
     public async Task Read_NullFormatterWithFile_ReturnsValidationError_Test()
@@ -92,7 +92,7 @@ public class DataFormatterExtensionsTests
         IDataFormatter<FormatterExtSample> formatter = null!;
 
         // Act
-        ErrorOr<FormatterExtSample?> result = await formatter.Read(new FileInfo("does-not-matter.json"));
+        ErrorOr<FormatterExtSample?> result = await formatter.ReadAsync(new FileInfo("does-not-matter.json"));
 
         // Assert
         Assert.True(result.IsError);
@@ -101,7 +101,7 @@ public class DataFormatterExtensionsTests
     }
 
     /// <summary>
-    /// <c>Read(file)</c> with a null file returns a validation error naming "file".
+    /// <c>ReadAsync(file)</c> with a null file returns a validation error naming "file".
     /// </summary>
     [Fact]
     public async Task Read_NullFile_ReturnsValidationError_Test()
@@ -110,7 +110,7 @@ public class DataFormatterExtensionsTests
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
 
         // Act
-        ErrorOr<FormatterExtSample?> result = await formatter.Read((FileInfo)null!);
+        ErrorOr<FormatterExtSample?> result = await formatter.ReadAsync((FileInfo)null!);
 
         // Assert
         Assert.True(result.IsError);
@@ -119,11 +119,11 @@ public class DataFormatterExtensionsTests
     }
 
     // ------------------------------------------------------------------
-    // Argument validation — Write
+    // Argument validation — WriteAsync
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// <c>Write(stream)</c> with a null formatter returns a validation error naming "formatter".
+    /// <c>WriteAsync(stream)</c> with a null formatter returns a validation error naming "formatter".
     /// </summary>
     [Fact]
     public async Task Write_NullFormatterWithStream_ReturnsValidationError_Test()
@@ -133,7 +133,7 @@ public class DataFormatterExtensionsTests
         using MemoryStream stream = new MemoryStream();
 
         // Act
-        ErrorOr<Success> result = await formatter.Write(new FormatterExtSample(), stream);
+        ErrorOr<Success> result = await DataFormatterExtensions.WriteAsync(formatter, new FormatterExtSample(), stream);
 
         // Assert
         Assert.True(result.IsError);
@@ -142,7 +142,7 @@ public class DataFormatterExtensionsTests
     }
 
     /// <summary>
-    /// <c>Write(stream)</c> with a null stream returns a validation error naming "stream".
+    /// <c>WriteAsync(stream)</c> with a null stream returns a validation error naming "stream".
     /// </summary>
     [Fact]
     public async Task Write_NullStream_ReturnsValidationError_Test()
@@ -151,7 +151,7 @@ public class DataFormatterExtensionsTests
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
 
         // Act
-        ErrorOr<Success> result = await formatter.Write(new FormatterExtSample(), (Stream)null!);
+        ErrorOr<Success> result = await DataFormatterExtensions.WriteAsync(formatter, new FormatterExtSample(), (Stream)null!);
 
         // Assert
         Assert.True(result.IsError);
@@ -160,7 +160,7 @@ public class DataFormatterExtensionsTests
     }
 
     /// <summary>
-    /// <c>Write(file)</c> with a null formatter returns a validation error naming "formatter".
+    /// <c>WriteAsync(file)</c> with a null formatter returns a validation error naming "formatter".
     /// </summary>
     [Fact]
     public async Task Write_NullFormatterWithFile_ReturnsValidationError_Test()
@@ -169,7 +169,7 @@ public class DataFormatterExtensionsTests
         IDataFormatter<FormatterExtSample> formatter = null!;
 
         // Act
-        ErrorOr<Success> result = await formatter.Write(new FormatterExtSample(), new FileInfo("does-not-matter.json"));
+        ErrorOr<Success> result = await formatter.WriteAsync(new FormatterExtSample(), new FileInfo("does-not-matter.json"));
 
         // Assert
         Assert.True(result.IsError);
@@ -178,7 +178,7 @@ public class DataFormatterExtensionsTests
     }
 
     /// <summary>
-    /// <c>Write(file)</c> with a null file returns a validation error naming "file".
+    /// <c>WriteAsync(file)</c> with a null file returns a validation error naming "file".
     /// </summary>
     [Fact]
     public async Task Write_NullFile_ReturnsValidationError_Test()
@@ -187,7 +187,7 @@ public class DataFormatterExtensionsTests
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
 
         // Act
-        ErrorOr<Success> result = await formatter.Write(new FormatterExtSample(), (FileInfo)null!);
+        ErrorOr<Success> result = await formatter.WriteAsync(new FormatterExtSample(), (FileInfo)null!);
 
         // Assert
         Assert.True(result.IsError);
@@ -200,7 +200,7 @@ public class DataFormatterExtensionsTests
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// With compression disabled, <c>Write</c> then <c>Read</c> against a stream must round-trip the
+    /// With compression disabled, <c>WriteAsync</c> then <c>ReadAsync</c> against a stream must round-trip the
     /// object unchanged (the extension simply forwards to the wrapped formatter).
     /// </summary>
     [Fact]
@@ -212,12 +212,12 @@ public class DataFormatterExtensionsTests
         using MemoryStream stream = new MemoryStream();
 
         // Act (write, no compression)
-        ErrorOr<Success> writeResult = await formatter.Write(data, stream, compress: false);
+        ErrorOr<Success> writeResult = await formatter.WriteAsync(data, stream, compress: false);
         Assert.False(writeResult.IsError);
 
         // Act (read, no decompression)
         stream.Position = 0;
-        ErrorOr<FormatterExtSample?> readResult = await formatter.Read(stream, decompress: false);
+        ErrorOr<FormatterExtSample?> readResult = await formatter.ReadAsync(stream, decompress: false);
 
         // Assert
         Assert.False(readResult.IsError);
@@ -227,7 +227,7 @@ public class DataFormatterExtensionsTests
     }
 
     /// <summary>
-    /// With compression disabled, <c>Write</c> then <c>Read</c> against a file must round-trip the
+    /// With compression disabled, <c>WriteAsync</c> then <c>ReadAsync</c> against a file must round-trip the
     /// object. A unique temporary file is used and removed afterwards.
     /// </summary>
     [Fact]
@@ -241,12 +241,12 @@ public class DataFormatterExtensionsTests
         try
         {
             // Act (write to file, no compression)
-            ErrorOr<Success> writeResult = await formatter.Write(data, new FileInfo(path), compress: false);
+            ErrorOr<Success> writeResult = await formatter.WriteAsync(data, new FileInfo(path), compress: false);
             Assert.False(writeResult.IsError);
             Assert.True(File.Exists(path));
 
             // Act (read from file, no decompression)
-            ErrorOr<FormatterExtSample?> readResult = await formatter.Read(new FileInfo(path), decompress: false);
+            ErrorOr<FormatterExtSample?> readResult = await formatter.ReadAsync(new FileInfo(path), decompress: false);
 
             // Assert
             Assert.False(readResult.IsError);
@@ -266,7 +266,7 @@ public class DataFormatterExtensionsTests
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// With compression enabled, <c>Write</c> must emit a valid GZip stream whose decompressed
+    /// With compression enabled, <c>WriteAsync</c> must emit a valid GZip stream whose decompressed
     /// content equals exactly the formatter's uncompressed serialization. This checks the compress
     /// branch in isolation (a real GZip decompressor validates the output).
     /// </summary>
@@ -279,12 +279,12 @@ public class DataFormatterExtensionsTests
 
         // The uncompressed serialization is the expected decompressed payload.
         using MemoryStream raw = new MemoryStream();
-        await formatter.Write(data, raw, compress: false);
+        await formatter.WriteAsync(data, raw, compress: false);
         byte[] expectedJson = raw.ToArray();
 
         // Act: write with compression enabled.
         using MemoryStream compressed = new MemoryStream();
-        ErrorOr<Success> writeResult = await formatter.Write(data, compressed, compress: true);
+        ErrorOr<Success> writeResult = await formatter.WriteAsync(data, compressed, compress: true);
         Assert.False(writeResult.IsError);
 
         // Assert: the output is valid GZip and decompresses back to the raw JSON bytes.
@@ -295,7 +295,7 @@ public class DataFormatterExtensionsTests
     }
 
     /// <summary>
-    /// With compression disabled, <c>Read</c> must simply delegate to the wrapped formatter's
+    /// With compression disabled, <c>ReadAsync</c> must simply delegate to the wrapped formatter's
     /// <see cref="IDataFormatter{T}.ReadAsync(Stream, CancellationToken)"/> and return its result.
     /// A NSubstitute mock verifies both the delegation and the passed-through value.
     /// </summary>
@@ -310,7 +310,7 @@ public class DataFormatterExtensionsTests
             .Returns(Task.FromResult((ErrorOr<FormatterExtSample?>)expected));
 
         // Act
-        ErrorOr<FormatterExtSample?> result = await mock.Read(stream, decompress: false);
+        ErrorOr<FormatterExtSample?> result = await mock.ReadAsync(stream, decompress: false);
 
         // Assert: the wrapped formatter was called exactly once with the same stream, and its
         // result flowed straight back to the caller.
@@ -320,7 +320,7 @@ public class DataFormatterExtensionsTests
     }
 
     /// <summary>
-    /// With compression disabled, <c>Write</c> must delegate to the wrapped formatter's
+    /// With compression disabled, <c>WriteAsync</c> must delegate to the wrapped formatter's
     /// <see cref="IDataFormatter{T}.WriteAsync(T, Stream, CancellationToken)"/>. Verified with a mock.
     /// </summary>
     [Fact]
@@ -334,15 +334,86 @@ public class DataFormatterExtensionsTests
             .Returns(Task.FromResult((ErrorOr<Success>)Result.Success));
 
         // Act
-        ErrorOr<Success> result = await mock.Write(data, stream, compress: false);
+        ErrorOr<Success> result = await mock.WriteAsync(data, stream, compress: false);
 
         // Assert
         Assert.False(result.IsError);
         await mock.Received(1).WriteAsync(data, stream, Arg.Any<CancellationToken>());
     }
 
+    // ------------------------------------------------------------------
+    // Round-trips with compression (the full compress + decompress path)
+    // ------------------------------------------------------------------
+
     /// <summary>
-    /// With decompression enabled, <c>Read</c> must first peel the GZip layer and then delegate to
+    /// The full default path: <c>WriteAsync</c> with compression followed by <c>ReadAsync</c> with
+    /// decompression against the same stream must round-trip the object unchanged. Unlike the other
+    /// composition tests, both the compress and the decompress side are real here, so this is the only
+    /// test that exercises the hand-off between them — the decompressed stream the GZip layer hands to
+    /// the inner formatter must be positioned at the beginning, otherwise the formatter sees no bytes.
+    /// </summary>
+    [Fact]
+    public async Task WriteThenRead_StreamWithCompression_RoundTrips_Test()
+    {
+        // Arrange
+        SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
+        FormatterExtSample data = new FormatterExtSample { Name = "compressed-round-trip", Value = 42 };
+        using MemoryStream stream = new MemoryStream();
+
+        // Act (write, compressed)
+        ErrorOr<Success> writeResult = await formatter.WriteAsync(data, stream, compress: true);
+        Assert.False(writeResult.IsError);
+        Assert.True(stream.Length > 0);
+
+        // Act (read back, decompressed)
+        stream.Position = 0;
+        ErrorOr<FormatterExtSample?> readResult = await formatter.ReadAsync(stream, decompress: true);
+
+        // Assert
+        Assert.False(readResult.IsError);
+        Assert.NotNull(readResult.Value);
+        Assert.Equal(data.Name, readResult.Value!.Name);
+        Assert.Equal(data.Value, readResult.Value!.Value);
+    }
+
+    /// <summary>
+    /// The same full round-trip through a file, using the default flags (<c>compress</c> and
+    /// <c>decompress</c> both default to <see langword="true"/>) — i.e. exactly how a caller uses the
+    /// extensions when they do not opt out of compression.
+    /// </summary>
+    [Fact]
+    public async Task WriteThenRead_FileWithCompression_RoundTrips_Test()
+    {
+        // Arrange: a unique temp-file path so parallel test runs never collide.
+        SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
+        FormatterExtSample data = new FormatterExtSample { Name = "compressed-file-round-trip", Value = 99 };
+        string path = Path.Combine(Path.GetTempPath(), "fnf_" + Guid.NewGuid().ToString("N") + ".json.gz");
+
+        try
+        {
+            // Act (write to file with the default compression)
+            ErrorOr<Success> writeResult = await formatter.WriteAsync(data, new FileInfo(path));
+            Assert.False(writeResult.IsError);
+            Assert.True(File.Exists(path));
+
+            // Act (read back from file with the default decompression)
+            ErrorOr<FormatterExtSample?> readResult = await formatter.ReadAsync(new FileInfo(path));
+
+            // Assert
+            Assert.False(readResult.IsError);
+            Assert.NotNull(readResult.Value);
+            Assert.Equal(data.Name, readResult.Value!.Name);
+            Assert.Equal(data.Value, readResult.Value!.Value);
+        }
+        finally
+        {
+            // Clean up the temporary file regardless of the test outcome.
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// With decompression enabled, <c>ReadAsync</c> must first peel the GZip layer and then delegate to
     /// the wrapped formatter with the decompressed stream. A real GZip payload drives the
     /// decompression while a mock formatter confirms the delegation and supplies the final value.
     /// </summary>
@@ -362,7 +433,7 @@ public class DataFormatterExtensionsTests
             .Returns(Task.FromResult((ErrorOr<FormatterExtSample?>)expected));
 
         // Act
-        ErrorOr<FormatterExtSample?> result = await mock.Read(gzip, decompress: true);
+        ErrorOr<FormatterExtSample?> result = await mock.ReadAsync(gzip, decompress: true);
 
         // Assert: the GZip layer was peeled and the inner formatter produced the final value.
         Assert.False(result.IsError);

@@ -73,7 +73,7 @@ public class GZipStreamFormatterTests
     }
 
     /// <summary>
-    /// Write validates a non-positive buffer size (after the null checks) and names "BufferSize".
+    /// WriteAsync validates a non-positive buffer size (after the null checks) and names "BufferSize".
     /// Valid non-null streams are supplied so the buffer-size guard is the one that fires.
     /// </summary>
     [Theory]
