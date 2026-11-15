@@ -206,8 +206,10 @@ public class AesStreamFormatterTests
     {
         // Arrange
         using X509Certificate2 certificate = CryptoFormatterBaseTests.CreateSelfSignedCertificate();
+#pragma warning disable CS0618 // The certificate members are obsolete since 3.4.0 (B2); tested on purpose, so data written with them stays readable.
         AesStreamFormatter writer = new AesStreamFormatter(certificate);
         AesStreamFormatter reader = new AesStreamFormatter(certificate);
+#pragma warning restore CS0618
         byte[] plaintext = Encoding.UTF8.GetBytes("Certificate derived stream round-trip.");
         using MemoryStream source = new MemoryStream(plaintext);
         using MemoryStream cipher = new MemoryStream();
@@ -430,7 +432,9 @@ public class AesStreamFormatterTests
     {
         // Arrange
         using X509Certificate2 certificate = CryptoFormatterBaseTests.LoadFixedCertificate();
+#pragma warning disable CS0618 // The certificate members are obsolete since 3.4.0 (B2); tested on purpose, so data written with them stays readable.
         AesStreamFormatter formatter = new AesStreamFormatter(certificate);
+#pragma warning restore CS0618
         using MemoryStream source = new MemoryStream(CryptoFormatterBaseTests.NistPlaintext);
         using MemoryStream output = new MemoryStream();
 
@@ -450,7 +454,9 @@ public class AesStreamFormatterTests
     {
         // Arrange
         using X509Certificate2 certificate = CryptoFormatterBaseTests.LoadFixedCertificate();
+#pragma warning disable CS0618 // The certificate members are obsolete since 3.4.0 (B2); tested on purpose, so data written with them stays readable.
         AesStreamFormatter formatter = new AesStreamFormatter(certificate);
+#pragma warning restore CS0618
         using MemoryStream input = new MemoryStream(CryptoFormatterBaseTests.FixedCertificateCiphertext);
 
         // Act

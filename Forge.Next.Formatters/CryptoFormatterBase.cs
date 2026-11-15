@@ -43,6 +43,9 @@ public abstract class CryptoFormatterBase<T> : ICryptoFormatter<T>
     /// </summary>
     /// <param name="certificate">The X509 certificate to use for encryption and decryption.</param>
     /// <exception cref="ArgumentNullException">Thrown when the certificate is null.</exception>
+    /// <remarks>Obsolete since 3.4.0: the IV and the key come from the certificate's public key, so anyone who has
+    /// the certificate can compute them. It is kept, unchanged, so data written this way stays readable.</remarks>
+    [Obsolete("Derives the IV and the key from the certificate's public key, so anyone who has the certificate can decrypt. Use a secret IV and Key of your own; keep this only to read data written this way.")]
     protected CryptoFormatterBase(X509Certificate2 certificate)
     {
         if (certificate is null) throw new ArgumentNullException(nameof(certificate));
@@ -68,6 +71,9 @@ public abstract class CryptoFormatterBase<T> : ICryptoFormatter<T>
     /// <summary>
     /// Gets or sets the X509 certificate used for encryption and decryption. When set, the IV and key values are derived from the public key of the certificate.
     /// </summary>
+    /// <remarks>Obsolete since 3.4.0: the IV and the key come from the certificate's public key, so anyone who has
+    /// the certificate can compute them. It is kept, unchanged, so data written this way stays readable.</remarks>
+    [Obsolete("Derives the IV and the key from the certificate's public key, so anyone who has the certificate can decrypt. Use a secret IV and Key of your own; keep this only to read data written this way.")]
     public X509Certificate2? Certificate
     {
         get { return _certificate; }

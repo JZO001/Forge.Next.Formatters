@@ -22,6 +22,9 @@ public class AesByteArrayFormatter : CryptoFormatterBase<byte[]>, IAesByteArrayF
     /// Initializes a new instance of the <see cref="AesByteArrayFormatter"/> class.
     /// </summary>
     /// <param name="certificate">The X509 certificate used for encryption and decryption.</param>
+    /// <remarks>Obsolete since 3.4.0: the IV and the key come from the certificate's public key, so anyone who has
+    /// the certificate can compute them. It is kept, unchanged, so data written this way stays readable.</remarks>
+    [Obsolete("Derives the IV and the key from the certificate's public key, so anyone who has the certificate can decrypt. Use a secret IV and Key of your own; keep this only to read data written this way.")]
     public AesByteArrayFormatter(X509Certificate2 certificate) : base(certificate)
     {
     }

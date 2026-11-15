@@ -91,7 +91,9 @@ formatter, and dependency-injection registrations. Read in this order:
    theirs at the end. The caller owns the returned stream.
 7. **Data written earlier stays readable.** The AES output is the bare ciphertext of `Aes.Create()` with its default
    mode and padding (the code sets neither), without a header. A certificate gives the IV from the first 16 and the key
-   from the last 32 bytes of `PublicKey.EncodedKeyValue.RawData`. The `compress` layer of the extensions is plain GZip.
+   from the last 32 bytes of `PublicKey.EncodedKeyValue.RawData`; its members are `[Obsolete]` (a warning) since 3.4.0
+   (B2), but work as before, so data written with them stays readable. The `compress` layer of the extensions is plain
+   GZip.
    Changing any of these makes stored data unreadable: treat it as a breaking change. The known-answer tests pin
    them on every target (`…_NistVector_…` with NIST SP 800-38A F.2.5, `…_FixedCertificate_…`): a change that makes one
    of them fail is such a change.

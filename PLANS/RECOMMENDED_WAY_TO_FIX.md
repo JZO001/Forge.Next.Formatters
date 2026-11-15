@@ -47,8 +47,8 @@ Re-checked against the code on 2026-11-15. The baseline after B5: 0 warnings on 
   - A6 comes before A5, A1 and A2, so their tests also run the `net48` code paths, and the A5 outputs prove that
     `net48` and the .NET targets give the same bytes.
   - A7 comes last: it describes the code after A1 to A6.
-- **Release B** (recommended, not decided yet): **B6 → B3 → B2 → B1 → B4** (B5 is done). Done: B6 and B3, as 3.4.0
-  (2026-11-15). Next: B2. B6 decides the versions of the others; B3 is small and shared with Forge.Next.Formatters.Newtonsoft; B2 (a) is small and comes before the large B1,
+- **Release B** (recommended, not decided yet): **B6 → B3 → B2 → B1 → B4** (B5 is done). Done: B6, B3 and B2 (a), in
+  3.4.0 (2026-11-15), which Zoltán publishes when everything is done. Next: B1. B6 decides the versions of the others; B3 is small and shared with Forge.Next.Formatters.Newtonsoft; B2 (a) is small and comes before the large B1,
   which builds on the A5 tests.
 
 ## Release A
@@ -210,7 +210,11 @@ Correct the README to the code as it is (the list in `AI/OPEN.md`):
   - the A5 outputs still read.
 - **Docs:** README (the format, the property, the migration), `CLAUDE.md` invariant 7, `AI/DESIGN.md`, `AI/HISTORY.md`.
 
-### B2. The certificate [ ] (Decision)
+### B2. The certificate [x] 2026-11-15 (option (a))
+
+Done with (a) (Zoltán), in 3.4.0: `[Obsolete]` as a warning on the two `Certificate` properties and the three
+certificate constructors; the behaviour and the A5 outputs unchanged (`AI/HISTORY.md`). (b) stays an idea until a
+caller needs encryption with a certificate.
 
 - **Problem:** `Certificate` copies the IV from the first 16 and the key from the last 32 bytes of the certificate's
   public key (`PublicKey.EncodedKeyValue.RawData`), so anyone who has the certificate can compute them; no private key

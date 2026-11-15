@@ -7,14 +7,11 @@ The order and the way to fix them: `PLANS/RECOMMENDED_WAY_TO_FIX.md` (2026-11-12
 
 ## Waiting for Zoltán
 
-- **The AES key material.** Two properties of the code, each a decision (the third, `System.Random` for the default
-  IV and key, was fixed on 2026-11-15, see `HISTORY.md`):
-  - a certificate gives the IV and the key from its public key, so anyone who has the certificate computes them, no
-    private key needed. Since 2026-11-15 the README warns about it (the recipe and "Security notes"); the behaviour
-    stays until B2. For an RSA 2048 certificate, moreover, 9 bytes of the IV and 5 of the key are the same for every
-    certificate (`DESIGN.md`);
-  - one IV per formatter, for every message, and no authentication of the ciphertext (`DESIGN.md`; the README's
-    "Security notes" say so since 2026-11-15; B1).
+- **The AES output** (B1 of the plan): one IV per formatter, for every message, and no authentication of the
+  ciphertext (`DESIGN.md`; the README's "Security notes" say so since 3.4.0). The other two properties of the key
+  material are settled (2026-11-15, `HISTORY.md`): the default IV and key come from `RandomNumberGenerator` (A1), and
+  the certificate derivation is `[Obsolete]` (B2 (a)). A secure certificate mode (B2 (b): a per-message key wrapped
+  with RSA-OAEP, read with the private key) waits until a caller needs one; it would belong to B1's new format.
 
   Changing the derivation or the output makes stored data unreadable (`CLAUDE.md`, invariant 7).
 - **The published versions and the local packages.** Tags mark 3.0.0, 3.1.0, 3.2.0, 3.2.1, 3.2.2 and 3.2.5; 3.3.0 has

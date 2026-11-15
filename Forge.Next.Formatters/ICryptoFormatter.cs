@@ -17,6 +17,9 @@ public interface ICryptoFormatter<T> : IDataFormatter<T>
     /// <summary>
     /// Gets or sets the certificate used for encryption/decryption.
     /// </summary>
+    /// <remarks>Obsolete since 3.4.0: the IV and the key come from the certificate's public key, so anyone who has
+    /// the certificate can compute them. It is kept, unchanged, so data written this way stays readable.</remarks>
+    [Obsolete("Derives the IV and the key from the certificate's public key, so anyone who has the certificate can decrypt. Use a secret IV and Key of your own; keep this only to read data written this way.")]
     X509Certificate2? Certificate { get; set; }
 
     /// <summary>

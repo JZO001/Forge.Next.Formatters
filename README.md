@@ -140,7 +140,7 @@ cryptographic configuration surface:
 public interface ICryptoFormatter<T> : IDataFormatter<T>
 {
     int BufferSize { get; set; }               // read/write chunk size
-    X509Certificate2? Certificate { get; set; } // derives IV + Key when set
+    X509Certificate2? Certificate { get; set; } // derives IV + Key when set; obsolete since 3.4.0
     byte[] IV { get; set; }                    // 16-byte initialization vector
     byte[] Key { get; set; }                   // 32-byte (AES-256) key
 }
@@ -653,8 +653,8 @@ everything below.
   `RandomNumberGenerator`, a cryptographic random number generator, on every target. Versions before
   3.4.0 used `System.Random`, which is predictable; on `net48` two instances created at the same moment
   could even get the same IV and key.
-- `CryptoFormatterBase(X509Certificate2 certificate)` — derives the IV and key from the
-  certificate's **public** key. Throws `ArgumentNullException` if `certificate` is `null`. Anyone who
+- `CryptoFormatterBase(X509Certificate2 certificate)` — **obsolete since 3.4.0.** Derives the IV and key
+  from the certificate's **public** key. Throws `ArgumentNullException` if `certificate` is `null`. Anyone who
   has the certificate can compute the same IV and key: see [Security notes](#security-notes).
 - `CryptoFormatterBase(byte[] iv, byte[] key)` — uses the supplied IV and key. Throws
   `ArgumentNullException` if either is `null` (and the property setters below validate the length).
@@ -662,7 +662,8 @@ everything below.
 **Public properties**
 
 - `int BufferSize { get; set; }` — chunk size (default `8192`).
-- `X509Certificate2? Certificate { get; set; }` — when set to a non-`null` certificate, the IV is
+- `X509Certificate2? Certificate { get; set; }` — **obsolete since 3.4.0** (see
+  [Security notes](#security-notes)). When set to a non-`null` certificate, the IV is
   copied from the first 16 bytes of the public key's raw data (`PublicKey.EncodedKeyValue.RawData`)
   and the key from the last 32 bytes, into the current IV and key arrays (so arrays you assigned to
   `IV` or `Key` before are overwritten in place: the setters keep your array, they do not copy it).
@@ -710,7 +711,8 @@ Encrypts / decrypts a `byte[]` with AES-256. Inherits everything from
 **Constructors**
 
 - `AesByteArrayFormatter()` — random IV and key.
-- `AesByteArrayFormatter(X509Certificate2 certificate)` — IV/key derived from the certificate.
+- `AesByteArrayFormatter(X509Certificate2 certificate)` — IV/key derived from the certificate's public key;
+  **obsolete since 3.4.0** (see [Deriving keys from a certificate](#deriving-keys-from-a-certificate)).
 - `AesByteArrayFormatter(byte[] iv, byte[] key)` — explicit 16-byte IV and 32-byte key.
 
 **Public members**
@@ -762,7 +764,8 @@ Encrypts / decrypts a `Stream` with AES-256. Inherits everything from
 **Constructors**
 
 - `AesStreamFormatter()` — random IV and key.
-- `AesStreamFormatter(X509Certificate2 certificate)` — IV/key derived from the certificate.
+- `AesStreamFormatter(X509Certificate2 certificate)` — IV/key derived from the certificate's public key;
+  **obsolete since 3.4.0** (see [Deriving keys from a certificate](#deriving-keys-from-a-certificate)).
 - `AesStreamFormatter(byte[] iv, byte[] key)` — explicit 16-byte IV and 32-byte key.
 
 **Public members**
@@ -1038,6 +1041,10 @@ ErrorOr<byte[]?> restored = await gzip.ReadAsync(decompressInput);
 > same IV and key and decrypt the data. No private key is involved. Use this only where the data
 > needs no protection from whoever has the certificate, for example to read data written this way
 > earlier. For confidentiality, use a secret key of your own (see [Security notes](#security-notes)).
+>
+> Since 3.4.0 the certificate constructors and the `Certificate` property are marked `[Obsolete]`, so
+> using them gives the compiler warning CS0618. They still work exactly as before, so data written
+> this way stays readable; where you call them on purpose, suppress the warning there.
 
 When you construct an AES formatter with an `X509Certificate2`, its IV and key are derived
 deterministically from the certificate's public key, so two formatters built from the same
@@ -1051,8 +1058,10 @@ using System.Text;
 
 X509Certificate2 certificate = LoadCertificate(); // your certificate
 
+#pragma warning disable CS0618 // obsolete since 3.4.0: used on purpose, to read data written this way
 var writer = new AesByteArrayFormatter(certificate);
 var reader = new AesByteArrayFormatter(certificate); // same derived IV/key
+#pragma warning restore CS0618
 
 using var cipher = new MemoryStream();
 await writer.WriteAsync(Encoding.UTF8.GetBytes("hello"), cipher);
@@ -1149,7 +1158,8 @@ Handy `ErrorOr<T>` members:
   bytes. Where that matters, use a new random IV per message and store it next to the ciphertext.
 - **Keys derived from a certificate are not secret.** The IV and key come from the certificate's
   public key, so anyone who has the certificate can decrypt (see
-  [Deriving keys from a certificate](#deriving-keys-from-a-certificate)). For an RSA 2048
+  [Deriving keys from a certificate](#deriving-keys-from-a-certificate)); the certificate members are
+  obsolete since 3.4.0. For an RSA 2048
   certificate with the usual exponent 65537, moreover, 9 of the 16 IV bytes and 5 of the 32 key
   bytes are the same for every certificate (the DER header and the exponent).
 - **The generated keys.** Since 3.4.0 the parameterless AES constructors use a cryptographic random

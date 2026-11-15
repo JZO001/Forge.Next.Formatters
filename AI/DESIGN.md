@@ -99,6 +99,10 @@ overloads catch everything but the caller's cancellation.
   that encoding is the DER `SEQUENCE` of the modulus and the exponent, so the first 9 bytes of the IV
   (`3082010a0282010100`) and the last 5 bytes of the key (`0203010001`, the exponent 65537) are the same for every such
   certificate with the usual exponent 65537; only 7 bytes of the IV and 27 of the key come from the modulus (checked 2026-11-15).
+  Since 3.4.0 (B2) the `Certificate` property of `ICryptoFormatter<T>` and of `CryptoFormatterBase<T>`, and the three
+  certificate constructors, carry `[Obsolete]` as a warning, with the same message; the library itself uses them only
+  from inside these obsolete members, so it builds without warnings, and the tests suppress CS0618 around their
+  deliberate uses. `Certificate_Members_AreObsoleteAsWarning_Test` pins the attributes.
 - Every call creates an `Aes` with these values. The code sets no mode or padding, so `Aes`'s defaults apply (CBC,
   PKCS7). The output has no header and no authentication tag, and one formatter uses one IV for every message.
 - **Pinned by tests** (2026-11-15, A5): with the key, IV and plaintext of NIST SP 800-38A F.2.5 both AES formatters

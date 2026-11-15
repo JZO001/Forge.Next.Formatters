@@ -206,8 +206,10 @@ public class AesByteArrayFormatterTests
     {
         // Arrange: two formatters that share the same certificate (hence the same derived keys).
         using X509Certificate2 certificate = CryptoFormatterBaseTests.CreateSelfSignedCertificate();
+#pragma warning disable CS0618 // The certificate members are obsolete since 3.4.0 (B2); tested on purpose, so data written with them stays readable.
         AesByteArrayFormatter writer = new AesByteArrayFormatter(certificate);
         AesByteArrayFormatter reader = new AesByteArrayFormatter(certificate);
+#pragma warning restore CS0618
         byte[] plaintext = Encoding.UTF8.GetBytes("Certificate derived key round-trip.");
         using MemoryStream cipher = new MemoryStream();
 
@@ -373,7 +375,9 @@ public class AesByteArrayFormatterTests
     {
         // Arrange
         using X509Certificate2 certificate = CryptoFormatterBaseTests.LoadFixedCertificate();
+#pragma warning disable CS0618 // The certificate members are obsolete since 3.4.0 (B2); tested on purpose, so data written with them stays readable.
         AesByteArrayFormatter formatter = new AesByteArrayFormatter(certificate);
+#pragma warning restore CS0618
         using MemoryStream output = new MemoryStream();
 
         // Act
@@ -392,7 +396,9 @@ public class AesByteArrayFormatterTests
     {
         // Arrange
         using X509Certificate2 certificate = CryptoFormatterBaseTests.LoadFixedCertificate();
+#pragma warning disable CS0618 // The certificate members are obsolete since 3.4.0 (B2); tested on purpose, so data written with them stays readable.
         AesByteArrayFormatter formatter = new AesByteArrayFormatter(certificate);
+#pragma warning restore CS0618
         using MemoryStream input = new MemoryStream(CryptoFormatterBaseTests.FixedCertificateCiphertext);
 
         // Act

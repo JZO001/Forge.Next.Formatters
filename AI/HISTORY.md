@@ -315,3 +315,23 @@ existing file; the `FileInfo` read and the GZip-layered stream write throw. 220 
 **Compatibility:** a caller that cancels now gets an `OperationCanceledException` instead of an `Unexpected` error; the
 XML and SOAP formatters now observe the token (once, before their work). No signature changed. A minor version, by the
 rule confirmed in B6.
+
+## 2026-11-15 – The certificate derivation is obsolete (B2 (a))
+
+**Decided by Zoltán:** option (a) of B2, in 3.4.0, which Zoltán publishes only when all the planned work is done.
+- `[Obsolete]`, as a warning, on `ICryptoFormatter<T>.Certificate`, `CryptoFormatterBase<T>.Certificate`, and the
+  certificate constructors of `CryptoFormatterBase<T>`, `AesByteArrayFormatter` and `AesStreamFormatter`. The message:
+  the IV and the key come from the certificate's public key, so anyone who has the certificate can decrypt; use a
+  secret IV and Key, and keep this only to read data written this way. Each member's XML documentation has a remark
+  saying the same. `DiagnosticId` is not used: `ObsoleteAttribute` has no such property on `net48`.
+- The behaviour is unchanged: the A5 known-answer tests of the certificate still pass, so data written with a
+  certificate stays readable. The library builds without warnings, because it uses these members only from inside
+  the obsolete members themselves.
+- The tests that use the certificate on purpose suppress CS0618 with a `#pragma` around each use, with the reason;
+  `Certificate_Members_AreObsoleteAsWarning_Test` pins the five attributes and that they are warnings.
+- The README marks the members obsolete, and the certificate recipe shows the `#pragma`.
+
+(b), a secure certificate mode in B1's new format, waits until a caller needs encryption with a certificate.
+
+**Compatibility:** callers of these members get compiler warning CS0618; a build that treats warnings as errors fails
+until the use is suppressed or replaced. No signature or behaviour changed.

@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
@@ -265,10 +266,12 @@ public class CryptoFormatterBaseTests
         Buffer.BlockCopy(rawPublicKey, rawPublicKey.Length - ValidKeyLength, expectedKey, 0, ValidKeyLength);
 
         // Act: assigning the certificate triggers the derivation logic in the setter.
+#pragma warning disable CS0618 // The certificate members are obsolete since 3.4.0 (B2); tested on purpose, so data written with them stays readable.
         formatter.Certificate = certificate;
 
         // Assert: the stored certificate, IV and key all match the expectations.
         Assert.Same(certificate, formatter.Certificate);
+#pragma warning restore CS0618
         Assert.Equal(expectedIv, formatter.IV);
         Assert.Equal(expectedKey, formatter.Key);
     }
@@ -308,10 +311,12 @@ public class CryptoFormatterBaseTests
         byte[] keyBefore = (byte[])formatter.Key.Clone();
 
         // Act: assigning null should just store null and return before touching IV/key.
+#pragma warning disable CS0618 // The certificate members are obsolete since 3.4.0 (B2); tested on purpose, so data written with them stays readable.
         formatter.Certificate = null;
 
         // Assert: certificate is now null, but the previously derived material is untouched.
         Assert.Null(formatter.Certificate);
+#pragma warning restore CS0618
         Assert.Equal(ivBefore, formatter.IV);
         Assert.Equal(keyBefore, formatter.Key);
     }
@@ -335,6 +340,36 @@ public class CryptoFormatterBaseTests
         // Assert
         Assert.Equal(FixedCertificateIv, formatter.IV);
         Assert.Equal(FixedCertificateKey, formatter.Key);
+    }
+
+    /// <summary>
+    /// Pins the decision of B2: every member that takes or exposes the certificate is marked
+    /// <see cref="ObsoleteAttribute"/> since 3.4.0, as a warning and not an error, so callers learn that the
+    /// derivation uses only the public key, while their code still compiles and data written this way stays
+    /// readable.
+    /// </summary>
+    [Fact]
+    public void Certificate_Members_AreObsoleteAsWarning_Test()
+    {
+        // Arrange: the interface property, the base property and the three certificate constructors.
+        MemberInfo[] members =
+        {
+            typeof(ICryptoFormatter<byte[]>).GetProperty("Certificate")!,
+            typeof(CryptoFormatterBase<byte[]>).GetProperty("Certificate")!,
+            typeof(CryptoFormatterBase<byte[]>).GetConstructor(
+                BindingFlags.Instance | BindingFlags.NonPublic, null, new[] { typeof(X509Certificate2) }, null)!,
+            typeof(AesByteArrayFormatter).GetConstructor(new[] { typeof(X509Certificate2) })!,
+            typeof(AesStreamFormatter).GetConstructor(new[] { typeof(X509Certificate2) })!,
+        };
+
+        // Act & Assert: each one carries [Obsolete], and it is a warning.
+        foreach (MemberInfo member in members)
+        {
+            Assert.NotNull(member);
+            ObsoleteAttribute? obsolete = member.GetCustomAttribute<ObsoleteAttribute>();
+            Assert.NotNull(obsolete);
+            Assert.False(obsolete!.IsError);
+        }
     }
 
     // ------------------------------------------------------------------
@@ -511,7 +546,9 @@ public class CryptoFormatterBaseTests
 
         /// <summary>Forwards to the certificate-based base constructor (derives IV/key).</summary>
         public TestCryptoFormatter(X509Certificate2 certificate)
+#pragma warning disable CS0618 // The certificate members are obsolete since 3.4.0 (B2); tested on purpose, so data written with them stays readable.
             : base(certificate)
+#pragma warning restore CS0618
         {
         }
 
