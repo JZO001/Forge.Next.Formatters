@@ -106,7 +106,7 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
             byte[] buffer = new byte[BufferSize];
             int numRead = 0;
 
-            while ((numRead = csDecrypt.Read(buffer, 0, buffer.Length)) != 0)
+            while ((numRead = await csDecrypt.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
             {
                 await outputStream.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
             }

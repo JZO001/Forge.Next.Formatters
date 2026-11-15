@@ -1,19 +1,18 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net48;net8.0;net9.0;net10.0</TargetFrameworks>
+		<TargetFrameworks>net48;net8.0;net9.0;net10.0;net11.0</TargetFrameworks>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 		<LangVersion>12.0</LangVersion>
 		<GenerateDocumentationFile>true</GenerateDocumentationFile>
-		<DocumentationFile>Forge.Next.Formatters.xml</DocumentationFile>
 	</PropertyGroup>
 
 	<PropertyGroup>
 		<Title>Forge.Next.Formatters: Forge Patterns and Practices.</Title>
 		<Product>Forge.Next.Formatters: Forge Patterns and Practices.</Product>
 		<PackageId>Forge.Next.Formatters</PackageId>
-		<AssemblyVersion>3.3.0.0</AssemblyVersion>
+		<AssemblyVersion>3.3.1.0</AssemblyVersion>
 		<Version>$(AssemblyVersion)</Version>
 		<FileVersion>$(AssemblyVersion)</FileVersion>
 		<Authors>Zoltan Juhasz</Authors>
@@ -23,7 +22,7 @@
 		<PackageOutputPath>../artifacts/</PackageOutputPath>
 		<PackageProjectUrl>https://github.com/JZO001/Forge.Next.Formatters</PackageProjectUrl>
 		<RepositoryType>git</RepositoryType>
-		<licenses>https://github.com/JZO001/Forge.Next.Formatters#Apache-2.0-1-ov-file</licenses>
+		<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
 		<RepositoryUrl>https://github.com/JZO001/Forge.Next.Formatters</RepositoryUrl>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<ProjectGuid>{76362AB9-7CA8-4DF0-8E9A-AEADC39D95C9}</ProjectGuid>
@@ -32,7 +31,6 @@
 	<ItemGroup>
 		<None Include="../logo.png" Pack="true" Visible="false" PackagePath="" />
 		<None Include="../README.md" Pack="true" PackagePath="" />
-		<None Remove="Forge.Next.Formatters.xml" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -40,7 +38,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<PackageReference Include="Forge.Next.Shared" Version="3.3.0" />
+		<PackageReference Include="Forge.Next.Shared" Version="3.3.2" />
 		<PackageReference Include="SoapFormatter" Version="1.1.9" />
 	</ItemGroup>
 

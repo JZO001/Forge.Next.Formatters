@@ -178,4 +178,56 @@ public class XmlDataFormatterTests
         // Assert
         Assert.True(result.IsError);
     }
+
+    // ------------------------------------------------------------------
+    // Cancellation
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The read runs the synchronous <c>XmlSerializer.Deserialize</c> and does not use the token, so a
+    /// cancelled token does not stop it: the read succeeds. This pins the behaviour as it is.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_CancelledToken_IsIgnored_Test()
+    {
+        // Arrange: valid XML, written with a token that is not cancelled.
+        XmlDataFormatter<XmlSampleData> formatter = new XmlDataFormatter<XmlSampleData>();
+        using MemoryStream payload = new MemoryStream();
+        Assert.False((await formatter.WriteAsync(new XmlSampleData { Name = "Forge", Value = 1 }, payload)).IsError);
+        payload.Position = 0;
+
+        // Act
+        ErrorOr<XmlSampleData?> result = await formatter.ReadAsync(payload, new CancellationToken(canceled: true));
+
+        // Assert: the object is read as if the token were not cancelled.
+        Assert.False(result.IsError);
+        Assert.Equal("Forge", result.Value!.Name);
+    }
+
+    /// <summary>
+    /// The write serializes synchronously, then flushes. On the .NET targets the flush gets the token,
+    /// so a cancelled token gives an <see cref="ErrorType.Unexpected"/> error made from the cancellation
+    /// exception; on <c>net48</c> the flush has no token overload, so the write succeeds. This pins the
+    /// behaviour as it is.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_CancelledToken_ReturnsCancellationErrorExceptOnNet48_Test()
+    {
+        // Arrange
+        XmlDataFormatter<XmlSampleData> formatter = new XmlDataFormatter<XmlSampleData>();
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.WriteAsync(new XmlSampleData { Name = "Forge", Value = 1 }, output, new CancellationToken(canceled: true));
+
+#if NETCOREAPP
+        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+#else
+        // Assert: on net48 the token is not observed.
+        Assert.False(result.IsError);
+#endif
+    }
 }

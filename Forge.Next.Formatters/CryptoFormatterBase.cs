@@ -1,5 +1,6 @@
 ﻿using ErrorOr;
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Forge.Next.Formatters;
@@ -26,18 +27,15 @@ public abstract class CryptoFormatterBase<T> : ICryptoFormatter<T>
     public int BufferSize { get; set; } = Consts.DefaultBufferSize;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="CryptoFormatterBase{T}"/> class with random IV and key values.
+    /// Initializes a new instance of the <see cref="CryptoFormatterBase{T}"/> class with a random IV and key from a
+    /// cryptographic random number generator (<see cref="RandomNumberGenerator"/>), so every instance gets its own,
+    /// unpredictable values.
     /// </summary>
     protected CryptoFormatterBase()
     {
-#if NETCOREAPP
-        Random.Shared.NextBytes(_IV);
-        Random.Shared.NextBytes(_key);
-#else
-        Random random = new Random();
-        random.NextBytes(_IV);
-        random.NextBytes(_key);
-#endif
+        using RandomNumberGenerator rng = RandomNumberGenerator.Create();
+        rng.GetBytes(_IV);
+        rng.GetBytes(_key);
     }
 
     /// <summary>

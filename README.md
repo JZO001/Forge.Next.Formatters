@@ -5,8 +5,8 @@ Reference, practice and pattern implementations of **data formatters** for .NET:
 shares one small, predictable, `async` contract and never throws for expected failures — it returns
 an [`ErrorOr<T>`](https://github.com/amantinband/error-or) result instead.
 
-- **Package version:** `3.2.0`
-- **Target frameworks:** `net8.0`, `net9.0`, `net10.0`
+- **Package version:** `3.3.1`
+- **Target frameworks:** `net48` (without the Brotli formatters), `net8.0`, `net9.0`, `net10.0`, `net11.0`
 - **License:** Apache-2.0
 - **Package dependencies:** [`Forge.Next.Shared`](https://www.nuget.org/packages/Forge.Next.Shared), [`SoapFormatter`](https://www.nuget.org/packages/SoapFormatter)
 - **Repository:** <https://github.com/JZO001/Forge.Next.Formatters>
@@ -23,6 +23,7 @@ an [`ErrorOr<T>`](https://github.com/amantinband/error-or) result instead.
   - [Working with `ErrorOr<T>` results](#working-with-erroror-results)
   - [A note about streams and `Position`](#a-note-about-streams-and-position)
   - [A note about `BufferSize`](#a-note-about-buffersize)
+  - [Cancellation](#cancellation)
 - [Interfaces](#interfaces)
 - [Classes and public members](#classes-and-public-members)
   - [`Consts`](#consts)
@@ -44,6 +45,7 @@ an [`ErrorOr<T>`](https://github.com/amantinband/error-or) result instead.
   - [Deriving keys from a certificate](#deriving-keys-from-a-certificate)
   - [Persist an object to a compressed file](#persist-an-object-to-a-compressed-file)
 - [Error handling reference](#error-handling-reference)
+- [Security notes](#security-notes)
 - [License](#license)
 
 ---
@@ -74,8 +76,8 @@ formatter you have learned them all. The differences are only:
 |-----------|------------------|--------------|
 | `GZipByteArrayFormatter` | `byte[]` | GZip compression / decompression |
 | `GZipStreamFormatter` | `Stream` | GZip compression / decompression |
-| `BrotliByteArrayFormatter` | `byte[]` | Brotli compression / decompression |
-| `BrotliStreamFormatter` | `Stream` | Brotli compression / decompression |
+| `BrotliByteArrayFormatter` | `byte[]` | Brotli compression / decompression (not on `net48`) |
+| `BrotliStreamFormatter` | `Stream` | Brotli compression / decompression (not on `net48`) |
 | `XmlDataFormatter<T>` | `T` | XML serialization via `XmlSerializer` |
 | `XmlSoapFormatter<T>` | `T` | SOAP serialization via `SoapFormatter` |
 | `SystemJsonFormatter<T>` | `T` | JSON serialization via `System.Text.Json` |
@@ -93,8 +95,8 @@ The compression and encryption formatters come in two shapes:
   wiring formatters together without materializing an intermediate `byte[]`.
 
 On top of the per-formatter methods, the [`DataFormatterExtensions`](#dataformatterextensions)
-helpers add file/stream `Read` / `Write` methods that can transparently GZip-(de)compress the
-payload for *any* formatter.
+helpers add file/stream `ReadAsync` / `WriteAsync` overloads that can transparently GZip-(de)compress
+the payload for *any* formatter.
 
 ---
 
@@ -177,30 +179,43 @@ The library produces three kinds of errors:
 
 | Error type | When |
 |------------|------|
-| `Validation` | An argument was `null`, or `BufferSize <= 0`. The `Description` is the offending parameter name, e.g. `"inputStream"` or `"BufferSize"`. |
+| `Validation` | An argument was `null`, or `BufferSize <= 0`. The arguments are checked before any work, and the `Description` is the offending parameter name, e.g. `"inputStream"` or `"BufferSize"`. |
 | `Forbidden` | The unimplemented `ReadAsync(inputStream, outputStream)` overload of the serialization formatters. `Description` is `"Method not implemented."`. |
-| *(failure)* | Any exception raised inside the operation (corrupt data, a non-readable stream, a wrong AES key, …) is caught and returned as an errored result — `IsError` is `true` — instead of propagating. |
+| `Unexpected` | Any exception raised inside the operation (corrupt data, a non-readable stream, a wrong AES key, a cancelled token, …) is caught and returned instead of propagating. You get **one error per exception in the inner-exception chain**, each with `Code` `"General.Unexpected"`, `Description` set to the exception's message, and `Metadata` with three entries: `"type"` (the exception's assembly-qualified type name), `"message"` and `"stackTrace"`. |
 
 Internally the "catch every exception and turn it into an errored result" behavior is provided by
 the `ProtectAsync` wrapper from `Forge.Next.Shared`, which every operation runs inside. You never
 call it directly; it is the reason a corrupt payload becomes `result.IsError == true` rather than a
 thrown exception.
 
+> The `"stackTrace"` and `"message"` metadata describe the library's internals. Log them, but do not
+> pass these errors unfiltered to an end user or across a trust boundary (see
+> [Security notes](#security-notes)).
+
+Only constructors and property setters throw: `ArgumentNullException` for a `null` certificate, IV,
+key or `SoapFormatter`, and `InvalidDataException` for an IV that is not 16 bytes or a key that is
+not 32 bytes.
+
 ### A note about streams and `Position`
 
-The **single-stream** read overloads that return a `Stream`
-(`GZipStreamFormatter.ReadAsync`, `BrotliStreamFormatter.ReadAsync` and
-`AesStreamFormatter.ReadAsync`) hand you back a `MemoryStream` that is positioned at **the end** of
-the data it just produced. Rewind it before reading:
+The **single-stream** read overloads that return a `Stream` hand you back a new `MemoryStream`
+that you own (dispose it when you are done). Where it is positioned depends on the formatter:
+
+| Formatter | Position of the returned stream |
+|-----------|---------------------------------|
+| `GZipStreamFormatter.ReadAsync` | **0**, ready to read (since 3.2.5) |
+| `BrotliStreamFormatter.ReadAsync` | **the end** of the data it produced: rewind it before reading |
+| `AesStreamFormatter.ReadAsync` | **the end** of the data it produced: rewind it before reading |
 
 ```csharp
 ErrorOr<Stream?> result = await formatter.ReadAsync(input);
-Stream output = result.Value!;
-output.Position = 0;          // <-- rewind before reading
+using Stream output = result.Value!;
+output.Position = 0;          // needed for Brotli and AES; harmless for GZip
 ```
 
 Likewise, after `WriteAsync` fills a `MemoryStream` you must rewind it (`Position = 0`) before you
-pass it to a `ReadAsync` call.
+pass it to a `ReadAsync` call. The formatters never close or dispose the streams you pass in, so
+you can rewind and reuse them.
 
 ### A note about `BufferSize`
 
@@ -209,9 +224,29 @@ The compression and encryption formatters expose an `int BufferSize` property
 streaming. When an operation reads or writes in chunks it first validates `BufferSize > 0`; a
 non-positive value produces a `Validation` error whose `Description` is `"BufferSize"`.
 
-The only exception is `GZipByteArrayFormatter.WriteAsync`, which writes the supplied `byte[]` to the
-GZip stream in a single call and therefore does not consult `BufferSize`. The serialization
-formatters (XML, SOAP, JSON) do not expose `BufferSize` at all.
+`GZipByteArrayFormatter.WriteAsync` writes the supplied `byte[]` to the GZip stream in a single
+call, so it does not use `BufferSize`, but it still validates it (since 3.1.0): a non-positive value
+gives the same `Validation` error there too. The serialization formatters (XML, SOAP, JSON) do not
+expose `BufferSize` at all.
+
+### Cancellation
+
+Every method takes a `CancellationToken` as its last parameter (`= default`). A cancellation does
+**not** throw: like any other exception inside an operation it comes back as an `Unexpected` error,
+whose `"type"` metadata names an `OperationCanceledException` (or a subclass such as
+`TaskCanceledException`).
+
+Not every formatter observes the token:
+
+| Formatter | Observes the token |
+|-----------|--------------------|
+| GZip, Brotli and AES formatters (both shapes) | Yes, on every read and write of the copy loop. |
+| `SystemJsonFormatter<T>` | Yes, through `JsonSerializer`. |
+| `XmlDataFormatter<T>.ReadAsync` | No: `XmlSerializer.Deserialize` is synchronous. |
+| `XmlDataFormatter<T>.WriteAsync` | Only on the .NET targets, and only at the final flush, after the XML has been serialized: the method then returns the cancellation error, **but the complete XML is still written to the output** when the writer is disposed. On `net48` it does not observe the token at all. |
+| `XmlSoapFormatter<T>` | No: `SoapFormatter` is synchronous. |
+
+The `DataFormatterExtensions` pass the token on to the formatter and to their GZip layer.
 
 ---
 
@@ -232,6 +267,9 @@ Every concrete formatter is registered and injected through an interface. The fu
 | `ISystemJsonFormatter<T>` | `IDataFormatter<T>` | `SerializerOptions` | `SystemJsonFormatter<T>` |
 | `IAesByteArrayFormatter` | `ICryptoFormatter<byte[]>` | — | `AesByteArrayFormatter` |
 | `IAesStreamFormatter` | `ICryptoFormatter<Stream>` | — | `AesStreamFormatter` |
+
+The two Brotli interfaces exist on every target, but their implementations do not exist on `net48`
+(`System.IO.Compression.Brotli` is not available there), so on `net48` nothing implements them.
 
 Program against the interfaces (they are what the
 [`AddForgeFormatters…`](#servicecollectionextensions) methods register) and let the container hand
@@ -319,7 +357,7 @@ Compresses / decompresses a `Stream` using GZip. Implements
 **Public members**
 
 - `int BufferSize { get; set; }` — chunk size (default `8192`).
-- `Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken)` — decompress and return a `Stream` (positioned at the end — rewind before reading).
+- `Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken)` — decompress and return a new `Stream`, positioned at 0 (since 3.2.5; earlier versions left it at the end).
 - `Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken)` — decompress into `outputStream`.
 - `Task<ErrorOr<Success>> WriteAsync(Stream data, Stream outputStream, CancellationToken)` — compress the `data` stream into `outputStream`.
 
@@ -338,12 +376,11 @@ using var compressed = new MemoryStream();
 // Compress the source stream into `compressed`
 await formatter.WriteAsync(source, compressed);
 
-// Decompress: the returned stream is positioned at its END
+// Decompress: the returned stream is already at position 0
 compressed.Position = 0;
 ErrorOr<Stream?> read = await formatter.ReadAsync(compressed);
 
-Stream decompressed = read.Value!;
-decompressed.Position = 0;                       // rewind!
+using Stream decompressed = read.Value!;
 using var reader = new StreamReader(decompressed);
 string text = await reader.ReadToEndAsync();     // "payload to compress"
 ```
@@ -354,6 +391,8 @@ string text = await reader.ReadToEndAsync();     // "payload to compress"
 
 Compresses / decompresses a `byte[]` using Brotli. Implements
 `IBrotliByteArrayFormatter : IDataFormatter<byte[]>`.
+
+> Available on `net8.0` and later only; `net48` has no Brotli (see [Interfaces](#interfaces)).
 
 **Public members**
 
@@ -387,6 +426,8 @@ byte[] restored = read.Value!;
 
 Compresses / decompresses a `Stream` using Brotli. Implements
 `IBrotliStreamFormatter : IDataFormatter<Stream>`.
+
+> Available on `net8.0` and later only; `net48` has no Brotli (see [Interfaces](#interfaces)).
 
 **Public members**
 
@@ -482,6 +523,11 @@ Serializes / deserializes an object of type `T` to SOAP XML using a
 
 > `T` must be marked `[Serializable]`.
 
+> **Read trusted input only.** `SoapFormatter.Deserialize` creates the types that the payload
+> names, not only `T`, so untrusted SOAP input can make it instantiate other types. Unless the input
+> is trusted, pass your own `SoapFormatter` whose `Binder` allows only the types you expect (see
+> [Security notes](#security-notes)).
+
 **Constructors**
 
 - `XmlSoapFormatter()` — creates an internal `SoapFormatter`.
@@ -542,8 +588,8 @@ Implements `ISystemJsonFormatter<T> : IDataFormatter<T>`.
 - `Task<ErrorOr<Success>> WriteAsync(T data, Stream outputStream, CancellationToken)` — serialize `data` to JSON.
 
 > Unlike the XML/SOAP formatters, `SystemJsonFormatter<T>.ReadAsync(inputStream)` does not
-> pre-validate a `null` stream: a `null` argument surfaces as a caught *(failure)* result
-> (`IsError == true`) rather than a `Validation` error. `WriteAsync` still returns a `Validation`
+> pre-validate a `null` stream: a `null` argument surfaces as an `Unexpected` error rather than a
+> `Validation` error. `WriteAsync` still returns a `Validation`
 > error for a `null` `data` or `outputStream`.
 
 **Example**
@@ -592,9 +638,13 @@ everything below.
 
 **Constructors** (all `protected`, exposed through the derived AES formatters)
 
-- `CryptoFormatterBase()` — generates a random IV (16 bytes) and key (32 bytes) via `Random.Shared`.
+- `CryptoFormatterBase()` — generates a random IV (16 bytes) and key (32 bytes) with
+  `RandomNumberGenerator`, a cryptographic random number generator, on every target. Versions before
+  3.3.1 used `System.Random`, which is predictable; on `net48` two instances created at the same moment
+  could even get the same IV and key.
 - `CryptoFormatterBase(X509Certificate2 certificate)` — derives the IV and key from the
-  certificate's public key. Throws `ArgumentNullException` if `certificate` is `null`.
+  certificate's **public** key. Throws `ArgumentNullException` if `certificate` is `null`. Anyone who
+  has the certificate can compute the same IV and key: see [Security notes](#security-notes).
 - `CryptoFormatterBase(byte[] iv, byte[] key)` — uses the supplied IV and key. Throws
   `ArgumentNullException` if either is `null` (and the property setters below validate the length).
 
@@ -602,7 +652,9 @@ everything below.
 
 - `int BufferSize { get; set; }` — chunk size (default `8192`).
 - `X509Certificate2? Certificate { get; set; }` — when set to a non-`null` certificate, the IV is
-  copied from the first 16 bytes of the public key's raw data and the key from the last 32 bytes.
+  copied from the first 16 bytes of the public key's raw data (`PublicKey.EncodedKeyValue.RawData`)
+  and the key from the last 32 bytes, into the current IV and key arrays (so arrays you assigned to
+  `IV` or `Key` before are overwritten in place: the setters keep your array, they do not copy it).
   Setting it to `null` is allowed and leaves the current IV/key untouched.
 - `byte[] IV { get; set; }` — 16-byte initialization vector. The setter throws `ArgumentNullException`
   for `null` and `InvalidDataException` when the length is not exactly `Consts.LengthOfIV` (16).
@@ -657,7 +709,9 @@ Encrypts / decrypts a `byte[]` with AES-256. Inherits everything from
 - `Task<ErrorOr<Success>> WriteAsync(byte[] data, Stream outputStream, CancellationToken)` — encrypt `data` into `outputStream`.
 - Plus the inherited `IV`, `Key`, `Certificate`, `BufferSize` members.
 
-> To decrypt data you must use the **same IV and key** that were used to encrypt it.
+> To decrypt data you must use the **same IV and key** that were used to encrypt it. The output is
+> AES-256-CBC with PKCS7 padding and nothing else: no header, no IV, no authentication tag (see
+> [Security notes](#security-notes)).
 
 **Example**
 
@@ -666,7 +720,8 @@ using Forge.Next.Formatters;
 using ErrorOr;
 using System.Text;
 
-// Fixed IV (16 bytes) and key (32 bytes) so we can decrypt later.
+// Fixed IV (16 bytes) and key (32 bytes) so we can decrypt later. For illustration only: in real
+// code use random values (see the AesStreamFormatter example) and keep the key secret.
 byte[] iv  = new byte[16] { 1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16 };
 byte[] key = new byte[32] {
     1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,
@@ -711,12 +766,16 @@ Encrypts / decrypts a `Stream` with AES-256. Inherits everything from
 ```csharp
 using Forge.Next.Formatters;
 using ErrorOr;
+using System.Security.Cryptography;
 using System.Text;
 
-byte[] iv  = new byte[16];  // use real random values in production
+byte[] iv  = new byte[16];
 byte[] key = new byte[32];
-Random.Shared.NextBytes(iv);
-Random.Shared.NextBytes(key);
+using (var rng = RandomNumberGenerator.Create())   // cryptographic random values, on every target
+{
+    rng.GetBytes(iv);
+    rng.GetBytes(key);
+}
 
 var formatter = new AesStreamFormatter(iv, key);
 
@@ -740,25 +799,39 @@ string message = await reader.ReadToEndAsync(); // "stream secret"
 
 ### `DataFormatterExtensions`
 
-Static class with `Read` / `Write` extension methods on **any** `IDataFormatter<T>`. They add two
-conveniences over the raw `ReadAsync` / `WriteAsync` methods:
+Static class with `ReadAsync` / `WriteAsync` extension methods on **any** `IDataFormatter<T>`
+(named `Read` / `Write` before 3.2.5). They add two conveniences over the formatters' own
+`ReadAsync` / `WriteAsync` methods:
 
-1. **File or stream** overloads — pass a `FileInfo` and the file is opened/created for you.
-2. **Transparent GZip** — an optional `compress` / `decompress` flag (which **defaults to `true`**)
-   wraps the payload in a GZip layer using an internal `GZipStreamFormatter`.
+1. **File or stream** overloads — pass a `FileInfo` and the file is opened for you (`FileShare.Read`);
+   writing creates the file or **overwrites** it.
+2. **Transparent GZip** — a `compress` / `decompress` flag (which **defaults to `true`**) wraps the
+   payload in a GZip layer using an internal `GZipStreamFormatter`.
 
-> **Important:** because `compress` / `decompress` default to `true`, `formatter.Write(data, stream)`
-> is **not** the same as `formatter.WriteAsync(data, stream)` — it also GZip-compresses. Use the
-> matching flag on both sides, or pass `compress: false` / `decompress: false` to opt out.
+> **Important — which method you call on a stream:** C# prefers a type's own method to an extension
+> method, so `formatter.WriteAsync(data, stream)` and `formatter.ReadAsync(stream)` call the
+> **formatter's own** methods, *without* GZip, even though the extensions default to `true`. To get
+> the GZip layer on a stream, pass the flag (`formatter.WriteAsync(data, stream, compress: true)`,
+> `formatter.ReadAsync(stream, decompress: true)`) or call the extension statically
+> (`DataFormatterExtensions.WriteAsync(formatter, data, stream)`). The `FileInfo` overloads have no
+> counterpart on the formatters, so `formatter.WriteAsync(data, file)` always reaches the extension
+> and compresses by default. Use the same setting on both sides.
 
 **Public members**
 
-- `Task<ErrorOr<T?>> Read<T>(this IDataFormatter<T> formatter, FileInfo file, bool decompress = true, CancellationToken)` — open `file`, read/decode it (GZip-decompressing first when `decompress`).
-- `Task<ErrorOr<T?>> Read<T>(this IDataFormatter<T> formatter, Stream stream, bool decompress = true, CancellationToken)` — read/decode `stream` (GZip-decompressing first when `decompress`).
-- `Task<ErrorOr<Success>> Write<T>(this IDataFormatter<T> formatter, T data, FileInfo file, bool compress = true, CancellationToken)` — write/encode `data` to `file` (GZip-compressing when `compress`).
-- `Task<ErrorOr<Success>> Write<T>(this IDataFormatter<T> formatter, T data, Stream stream, bool compress = true, CancellationToken)` — write/encode `data` to `stream` (GZip-compressing when `compress`).
+- `Task<ErrorOr<T?>> ReadAsync<T>(this IDataFormatter<T> formatter, FileInfo file, bool decompress = true, CancellationToken cancellationToken = default)` — open `file`, read/decode it (GZip-decompressing first when `decompress`).
+- `Task<ErrorOr<T?>> ReadAsync<T>(this IDataFormatter<T> formatter, Stream stream, bool decompress = true, CancellationToken cancellationToken = default)` — read/decode `stream` (GZip-decompressing first when `decompress`).
+- `Task<ErrorOr<Success>> WriteAsync<T>(this IDataFormatter<T> formatter, T data, FileInfo file, bool compress = true, CancellationToken cancellationToken = default)` — write/encode `data` to `file` (GZip-compressing when `compress`).
+- `Task<ErrorOr<Success>> WriteAsync<T>(this IDataFormatter<T> formatter, T data, Stream stream, bool compress = true, CancellationToken cancellationToken = default)` — write/encode `data` to `stream` (GZip-compressing when `compress`).
 
-A `null` `formatter`, `file` or `stream` returns a `Validation` error naming the offending argument.
+A `null` `formatter`, `data`, `file` or `stream` returns a `Validation` error naming the offending
+argument. With the GZip layer, the whole payload passes through memory: `WriteAsync` serializes into
+a `MemoryStream` before compressing it, and `ReadAsync` decompresses the whole input into a
+`MemoryStream` before the formatter reads it.
+
+> The `FileInfo` overloads catch every exception, like the formatters do. The `Stream` overloads do
+> not wrap the formatter call: the library's formatters never throw there, but an exception thrown
+> by your own `IDataFormatter<T>` implementation passes through them.
 
 **Example — write and read a compressed file**
 
@@ -771,60 +844,72 @@ var person = new Person { Name = "Ada", Age = 36 };
 var file = new FileInfo("person.json.gz");
 
 // Serialize to JSON and GZip-compress into the file (compress: true is the default)
-ErrorOr<Success> write = await formatter.Write(person, file);
+ErrorOr<Success> write = await formatter.WriteAsync(person, file);
 
 // Read it back, GZip-decompressing first (decompress: true is the default)
-ErrorOr<Person?> read = await formatter.Read(file);
+ErrorOr<Person?> read = await formatter.ReadAsync(file);
 Person restored = read.Value!;   // Name = "Ada", Age = 36
 ```
 
-**Example — opt out of the GZip layer**
+**Example — a stream, with and without the GZip layer**
 
 ```csharp
-// Plain JSON, no compression, straight to/from a stream.
 using var buffer = new MemoryStream();
-await formatter.Write(person, buffer, compress: false);
 
+// GZip on a stream: pass the flag, otherwise the formatter's own WriteAsync is called.
+await formatter.WriteAsync(person, buffer, compress: true);
 buffer.Position = 0;
-ErrorOr<Person?> plain = await formatter.Read(buffer, decompress: false);
+ErrorOr<Person?> unzipped = await formatter.ReadAsync(buffer, decompress: true);
+
+// Plain JSON, no compression: the same as the formatter's own methods.
+buffer.SetLength(0);
+await formatter.WriteAsync(person, buffer, compress: false);
+buffer.Position = 0;
+ErrorOr<Person?> plain = await formatter.ReadAsync(buffer, decompress: false);
 ```
 
 Because the methods extend `IDataFormatter<T>`, they compose with every formatter in the library —
-e.g. `xmlFormatter.Write(model, file)` for gzipped XML, or `aes.Write(bytes, stream)` for gzipped
-ciphertext.
+e.g. `xmlFormatter.WriteAsync(model, file)` for gzipped XML in a file. Compress before you encrypt
+(see [Compress and then encrypt](#compress-and-then-encrypt)): encrypted data does not compress.
 
 ---
 
 ### `ServiceCollectionExtensions`
 
-Registers the formatters with the Microsoft dependency-injection container. Two entry points are
+Registers the formatters with the Microsoft dependency-injection container. Three entry points are
 provided that differ only in the lifetime used for the non-SOAP formatters.
 
 **Public members**
 
+- `IServiceCollection AddForgeFormattersAsTransient(this IServiceCollection services)` — registers
+  the formatters below as **transient** and returns the same collection (since 3.2.2).
 - `IServiceCollection AddForgeFormattersAsScoped(this IServiceCollection services)` — registers the
   formatters below as **scoped** (SOAP is transient) and returns the same collection.
 - `IServiceCollection AddForgeFormattersAsSingleton(this IServiceCollection services)` — registers
   the formatters below as **singletons** (SOAP is transient) and returns the same collection.
 
-  | Service | Implementation | `…AsScoped` | `…AsSingleton` |
-  |---------|----------------|-------------|----------------|
-  | `IGZipByteArrayFormatter` | `GZipByteArrayFormatter` | Scoped | Singleton |
-  | `IGZipStreamFormatter` | `GZipStreamFormatter` | Scoped | Singleton |
-  | `IXmlDataFormatter<>` | `XmlDataFormatter<>` | Scoped | Singleton |
-  | `IBrotliStreamFormatter` | `BrotliStreamFormatter` | Scoped | Singleton |
-  | `IBrotliByteArrayFormatter` | `BrotliByteArrayFormatter` | Scoped | Singleton |
-  | `IAesByteArrayFormatter` | `AesByteArrayFormatter` | Scoped | Singleton |
-  | `IAesStreamFormatter` | `AesStreamFormatter` | Scoped | Singleton |
-  | `ISystemJsonFormatter<>` | `SystemJsonFormatter<>` | Scoped | Singleton |
-  | `IXmlSoapFormatter<>` | `XmlSoapFormatter<>` | Transient | Transient |
+  | Service | Implementation | `…AsTransient` | `…AsScoped` | `…AsSingleton` |
+  |---------|----------------|----------------|-------------|----------------|
+  | `IGZipByteArrayFormatter` | `GZipByteArrayFormatter` | Transient | Scoped | Singleton |
+  | `IGZipStreamFormatter` | `GZipStreamFormatter` | Transient | Scoped | Singleton |
+  | `IXmlDataFormatter<>` | `XmlDataFormatter<>` | Transient | Scoped | Singleton |
+  | `IBrotliStreamFormatter` | `BrotliStreamFormatter` | Transient | Scoped | Singleton |
+  | `IBrotliByteArrayFormatter` | `BrotliByteArrayFormatter` | Transient | Scoped | Singleton |
+  | `IAesByteArrayFormatter` | `AesByteArrayFormatter` | Transient | Scoped | Singleton |
+  | `IAesStreamFormatter` | `AesStreamFormatter` | Transient | Scoped | Singleton |
+  | `ISystemJsonFormatter<>` | `SystemJsonFormatter<>` | Transient | Scoped | Singleton |
+  | `IXmlSoapFormatter<>` | `XmlSoapFormatter<>` | Transient | Transient | Transient |
+
+  On `net48` the two Brotli rows are not registered, so each method adds seven services there, nine
+  on the other targets. The methods use `Add…`, not `TryAdd…`: calling one twice registers
+  everything twice.
 
 ```csharp
 using Forge.Next.Formatters;
 using Microsoft.Extensions.DependencyInjection;
 
 var services = new ServiceCollection();
-services.AddForgeFormattersAsScoped(); // or AddForgeFormattersAsSingleton()
+services.AddForgeFormattersAsScoped(); // or AddForgeFormattersAsTransient() / AddForgeFormattersAsSingleton()
 
 using var provider = services.BuildServiceProvider();
 using var scope = provider.CreateScope();
@@ -840,15 +925,16 @@ var xml  = scope.ServiceProvider.GetRequiredService<IXmlDataFormatter<Person>>()
 
 The `AddForgeFormatters…` methods are designed for ASP.NET Core / generic-host applications.
 Register once at startup and inject the interfaces where you need them. Pick
-`AddForgeFormattersAsSingleton` when the formatters are stateless in your usage, or
-`AddForgeFormattersAsScoped` when you configure per-scope state (for example a per-request AES key).
+`AddForgeFormattersAsSingleton` when the formatters are stateless in your usage,
+`AddForgeFormattersAsScoped` when you configure per-scope state (for example a per-request AES key),
+or `AddForgeFormattersAsTransient` when every consumer should get its own instance.
 
 ```csharp
 using Forge.Next.Formatters;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddForgeFormattersAsScoped(); // or AddForgeFormattersAsSingleton()
+builder.Services.AddForgeFormattersAsScoped(); // or AddForgeFormattersAsTransient() / AddForgeFormattersAsSingleton()
 
 var app = builder.Build();
 ```
@@ -878,11 +964,14 @@ public sealed class ArchiveService
 }
 ```
 
-> The AES default constructors generate a **random** IV/key per instance. With
+> The AES default constructors generate a **random** IV/key per instance, with a cryptographic random
+> number generator (`RandomNumberGenerator`). With
 > `AddForgeFormattersAsSingleton` the same key lives for the whole application; with
-> `AddForgeFormattersAsScoped` a new key is created per scope. Either way, if you need a *stable*
-> key across processes, configure `IV`/`Key`/`Certificate` yourself (or register your own instance)
-> rather than relying on the generated one.
+> `AddForgeFormattersAsScoped` a new key is created per scope; with `AddForgeFormattersAsTransient`
+> every resolution gets a new key, so a formatter injected into one service cannot decrypt what
+> another one encrypted. In every case, if you need a *stable* key across instances or processes,
+> configure `IV`/`Key` yourself (or register your own instance) rather than relying on the
+> generated one.
 
 ---
 
@@ -895,12 +984,16 @@ A common pipeline is to compress a payload and then encrypt the compressed bytes
 ```csharp
 using Forge.Next.Formatters;
 using ErrorOr;
+using System.Security.Cryptography;
 using System.Text;
 
 byte[] iv  = new byte[16];
 byte[] key = new byte[32];
-Random.Shared.NextBytes(iv);
-Random.Shared.NextBytes(key);
+using (var rng = RandomNumberGenerator.Create())
+{
+    rng.GetBytes(iv);
+    rng.GetBytes(key);
+}
 
 var gzip = new GZipByteArrayFormatter();
 var aes  = new AesByteArrayFormatter(iv, key);
@@ -928,10 +1021,15 @@ ErrorOr<byte[]?> restored = await gzip.ReadAsync(decompressInput);
 
 ### Deriving keys from a certificate
 
+> **Warning: this is not confidential encryption.** The IV and key come from the certificate's
+> **public** key alone, and a certificate is public by nature: anyone who has it can compute the
+> same IV and key and decrypt the data. No private key is involved. Use this only where the data
+> needs no protection from whoever has the certificate, for example to read data written this way
+> earlier. For confidentiality, use a secret key of your own (see [Security notes](#security-notes)).
+
 When you construct an AES formatter with an `X509Certificate2`, its IV and key are derived
-deterministically from the certificate's public key. Two formatters built from the same
-certificate can therefore encrypt and decrypt each other's data without sharing any secret
-material out of band.
+deterministically from the certificate's public key, so two formatters built from the same
+certificate read each other's output:
 
 ```csharp
 using Forge.Next.Formatters;
@@ -967,11 +1065,11 @@ file.Directory!.Create();
 
 var person = new Person { Name = "Ada", Age = 36 };
 
-// Serialize to JSON, GZip-compress, and write to the file in one call.
-ErrorOr<Success> saved = await formatter.Write(person, file);       // compress: true (default)
+// Serialize to JSON, GZip-compress, and write to the file in one call (overwrites the file).
+ErrorOr<Success> saved = await formatter.WriteAsync(person, file);  // compress: true (default)
 
 // Load: decompress and deserialize in one call.
-ErrorOr<Person?> loaded = await formatter.Read(file);               // decompress: true (default)
+ErrorOr<Person?> loaded = await formatter.ReadAsync(file);          // decompress: true (default)
 Person restored = loaded.Value!;
 ```
 
@@ -998,11 +1096,18 @@ formatter.BufferSize = 0;
 ErrorOr<byte[]?> badBuffer = await formatter.ReadAsync(new MemoryStream(new byte[] { 1, 2, 3 }));
 // badBuffer.FirstError.Description == "BufferSize"
 
-// Corrupt/undecodable input -> errored result (not an exception)
+// Corrupt/undecodable input -> Unexpected error (not an exception)
 var aes = new AesByteArrayFormatter();                 // random key
 var garbage = new MemoryStream(new byte[] { 9, 9, 9 });
 ErrorOr<byte[]?> corrupt = await aes.ReadAsync(garbage);
 // corrupt.IsError == true
+// corrupt.FirstError.Type == ErrorType.Unexpected
+// corrupt.FirstError.Metadata["type"] names the exception; "message" and "stackTrace" too
+
+// A cancelled token -> Unexpected error as well (no OperationCanceledException is thrown)
+formatter.BufferSize = Consts.DefaultBufferSize;
+ErrorOr<Success> cancelled = await formatter.WriteAsync(new byte[] { 1 }, new MemoryStream(), new CancellationToken(canceled: true));
+// cancelled.FirstError.Type == ErrorType.Unexpected
 ```
 
 Handy `ErrorOr<T>` members:
@@ -1012,6 +1117,33 @@ Handy `ErrorOr<T>` members:
 - `FirstError` — the first `Error`; use `.Type`, `.Code`, `.Description`.
 - `Errors` — the full list of `Error` values.
 - `Match(...)` / `MatchFirst(...)` / `Switch(...)` — functional handling.
+
+---
+
+## Security notes
+
+- **The AES output is not authenticated.** It is AES-256-CBC with PKCS7 padding, with no header and
+  no authentication tag. A modified ciphertext decrypts to modified data, or fails on the padding,
+  without the change being detected as such. If integrity matters, authenticate the ciphertext
+  yourself, for example with an HMAC-SHA256 over it under a separate key, checked before you decrypt.
+- **One formatter uses one IV for every message.** The IV is a property of the formatter, not of the
+  message, so two messages that begin with the same bytes give ciphertexts that begin with the same
+  bytes. Where that matters, use a new random IV per message and store it next to the ciphertext.
+- **Keys derived from a certificate are not secret.** The IV and key come from the certificate's
+  public key, so anyone who has the certificate can decrypt (see
+  [Deriving keys from a certificate](#deriving-keys-from-a-certificate)). For an RSA 2048
+  certificate with the usual exponent 65537, moreover, 9 of the 16 IV bytes and 5 of the 32 key
+  bytes are the same for every certificate (the DER header and the exponent).
+- **The generated keys.** Since 3.3.1 the parameterless AES constructors use a cryptographic random
+  number generator. Earlier versions used `System.Random`, which is predictable, and on `net48`
+  formatters created at the same moment got the same key; treat data encrypted with such a
+  generated key as weakly protected.
+- **SOAP deserialization creates the types the payload names.** `XmlSoapFormatter<T>.ReadAsync`
+  uses `SoapFormatter.Deserialize`, which instantiates whatever types the SOAP input names, not
+  only `T`. Read trusted input only, or pass a `SoapFormatter` whose `Binder` allows only the types
+  you expect.
+- **Errors carry internals.** An `Unexpected` error's metadata holds the exception's type, message
+  and stack trace. Log it, but do not send it unfiltered to an end user or another system.
 
 ---
 

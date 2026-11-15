@@ -213,6 +213,106 @@ public class BrotliStreamFormatterTests
     }
 
     // ------------------------------------------------------------------
+    // Cancellation
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// A cancelled token stops the single-stream read. The cancellation comes back as an
+    /// <see cref="ErrorType.Unexpected"/> error made from the cancellation exception, not as a thrown
+    /// exception, because the work runs in <c>ProtectAsync</c> with its defaults.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_CancelledToken_ReturnsCancellationError_Test()
+    {
+        // Arrange: a valid payload, written with a token that is not cancelled.
+        BrotliStreamFormatter formatter = new BrotliStreamFormatter();
+        using MemoryStream source = new MemoryStream(new byte[] { 1, 2, 3, 4 });
+        using MemoryStream payload = new MemoryStream();
+        Assert.False((await formatter.WriteAsync(source, payload)).IsError);
+        payload.Position = 0;
+
+        // Act
+        ErrorOr<Stream?> result = await formatter.ReadAsync(payload, new CancellationToken(canceled: true));
+
+        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+    }
+
+    /// <summary>
+    /// A cancelled token stops the two-stream read, with the same cancellation error.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsyncWithOutput_CancelledToken_ReturnsCancellationError_Test()
+    {
+        // Arrange: a valid payload, written with a token that is not cancelled.
+        BrotliStreamFormatter formatter = new BrotliStreamFormatter();
+        using MemoryStream source = new MemoryStream(new byte[] { 1, 2, 3, 4 });
+        using MemoryStream payload = new MemoryStream();
+        Assert.False((await formatter.WriteAsync(source, payload)).IsError);
+        payload.Position = 0;
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.ReadAsync(payload, output, new CancellationToken(canceled: true));
+
+        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+    }
+
+    /// <summary>
+    /// A cancelled token stops the write, with the same cancellation error.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_CancelledToken_ReturnsCancellationError_Test()
+    {
+        // Arrange
+        BrotliStreamFormatter formatter = new BrotliStreamFormatter();
+        using MemoryStream source = new MemoryStream(new byte[] { 1, 2, 3, 4 });
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.WriteAsync(source, output, new CancellationToken(canceled: true));
+
+        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+    }
+
+    // ------------------------------------------------------------------
+    // The returned stream
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The single-stream read returns a new <see cref="MemoryStream"/> positioned at its end (unlike
+    /// <see cref="GZipStreamFormatter"/>, which rewinds it), so the caller rewinds it before reading.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_ReturnedStream_IsAtEnd_Test()
+    {
+        // Arrange: a valid payload of a known length.
+        BrotliStreamFormatter formatter = new BrotliStreamFormatter();
+        byte[] original = Encoding.UTF8.GetBytes(new string('P', 300) + "-position");
+        using MemoryStream source = new MemoryStream(original);
+        using MemoryStream payload = new MemoryStream();
+        Assert.False((await formatter.WriteAsync(source, payload)).IsError);
+        payload.Position = 0;
+
+        // Act
+        ErrorOr<Stream?> result = await formatter.ReadAsync(payload);
+
+        // Assert: the stream holds the original bytes and is at its end.
+        Assert.False(result.IsError);
+        using Stream decompressed = result.Value!;
+        Assert.Equal(original.Length, decompressed.Length);
+        Assert.Equal(decompressed.Length, decompressed.Position);
+    }
+
+    // ------------------------------------------------------------------
     // Test helpers
     // ------------------------------------------------------------------
 

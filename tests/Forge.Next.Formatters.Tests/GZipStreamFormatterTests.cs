@@ -15,8 +15,8 @@ namespace Forge.Next.Formatters.Tests;
 /// formatter and therefore get dedicated tests:
 /// <list type="bullet">
 ///   <item>All three methods validate that <see cref="GZipStreamFormatter.BufferSize"/> is positive.</item>
-///   <item>The single-stream read overload returns a <see cref="MemoryStream"/> positioned at its
-///   end, so tests rewind it before reading.</item>
+///   <item>The single-stream read overload returns a <see cref="MemoryStream"/> rewound to position 0
+///   (since 3.2.5; the Brotli and AES stream formatters return theirs at the end).</item>
 /// </list>
 /// </summary>
 public class GZipStreamFormatterTests
@@ -289,12 +289,112 @@ public class GZipStreamFormatterTests
     }
 
     // ------------------------------------------------------------------
+    // Cancellation
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// A cancelled token stops the single-stream read. The cancellation comes back as an
+    /// <see cref="ErrorType.Unexpected"/> error made from the cancellation exception, not as a thrown
+    /// exception, because the work runs in <c>ProtectAsync</c> with its defaults.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_CancelledToken_ReturnsCancellationError_Test()
+    {
+        // Arrange: a valid payload, written with a token that is not cancelled.
+        GZipStreamFormatter formatter = new GZipStreamFormatter();
+        using MemoryStream source = new MemoryStream(new byte[] { 1, 2, 3, 4 });
+        using MemoryStream payload = new MemoryStream();
+        Assert.False((await formatter.WriteAsync(source, payload)).IsError);
+        payload.Position = 0;
+
+        // Act
+        ErrorOr<Stream?> result = await formatter.ReadAsync(payload, new CancellationToken(canceled: true));
+
+        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+    }
+
+    /// <summary>
+    /// A cancelled token stops the two-stream read, with the same cancellation error.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsyncWithOutput_CancelledToken_ReturnsCancellationError_Test()
+    {
+        // Arrange: a valid payload, written with a token that is not cancelled.
+        GZipStreamFormatter formatter = new GZipStreamFormatter();
+        using MemoryStream source = new MemoryStream(new byte[] { 1, 2, 3, 4 });
+        using MemoryStream payload = new MemoryStream();
+        Assert.False((await formatter.WriteAsync(source, payload)).IsError);
+        payload.Position = 0;
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.ReadAsync(payload, output, new CancellationToken(canceled: true));
+
+        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+    }
+
+    /// <summary>
+    /// A cancelled token stops the write, with the same cancellation error.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_CancelledToken_ReturnsCancellationError_Test()
+    {
+        // Arrange
+        GZipStreamFormatter formatter = new GZipStreamFormatter();
+        using MemoryStream source = new MemoryStream(new byte[] { 1, 2, 3, 4 });
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.WriteAsync(source, output, new CancellationToken(canceled: true));
+
+        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+    }
+
+    // ------------------------------------------------------------------
+    // The returned stream
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The single-stream read returns a new <see cref="MemoryStream"/> rewound to position 0 (since
+    /// 3.2.5), so the caller can read it at once; <see cref="DataFormatterExtensions"/> depends on it.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_ReturnedStream_IsAtPositionZero_Test()
+    {
+        // Arrange: a valid payload of a known length.
+        GZipStreamFormatter formatter = new GZipStreamFormatter();
+        byte[] original = Encoding.UTF8.GetBytes(new string('P', 300) + "-position");
+        using MemoryStream source = new MemoryStream(original);
+        using MemoryStream payload = new MemoryStream();
+        Assert.False((await formatter.WriteAsync(source, payload)).IsError);
+        payload.Position = 0;
+
+        // Act
+        ErrorOr<Stream?> result = await formatter.ReadAsync(payload);
+
+        // Assert: the stream holds the original bytes and is at its start.
+        Assert.False(result.IsError);
+        using Stream decompressed = result.Value!;
+        Assert.Equal(original.Length, decompressed.Length);
+        Assert.Equal(0, decompressed.Position);
+    }
+
+    // ------------------------------------------------------------------
     // Test helpers
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Rewinds a stream and returns all of its bytes. Used because the single-stream read
-    /// overload returns a stream positioned at the end of the decompressed content.
+    /// Rewinds a stream and returns all of its bytes, so the round-trip tests do not depend on the
+    /// position of the returned stream (that has a test of its own).
     /// </summary>
     /// <param name="stream">The stream to drain.</param>
     /// <returns>All bytes contained in the stream.</returns>

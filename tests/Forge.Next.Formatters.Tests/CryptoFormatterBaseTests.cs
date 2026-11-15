@@ -316,6 +316,140 @@ public class CryptoFormatterBaseTests
         Assert.Equal(keyBefore, formatter.Key);
     }
 
+    /// <summary>
+    /// Pins the derivation from a certificate, so data encrypted with one stays readable: the IV is the
+    /// first 16 and the key the last 32 bytes of the encoded public key. The expected values of the fixed
+    /// test certificate were computed once from its DER encoding. For an RSA 2048 certificate the first 9
+    /// bytes of that IV (the DER header) and the last 5 bytes of that key (the public exponent 65537) are
+    /// the same for every certificate.
+    /// </summary>
+    [Fact]
+    public void Certificate_FixedCertificate_DerivesKnownIvAndKey_Test()
+    {
+        // Arrange
+        using X509Certificate2 certificate = LoadFixedCertificate();
+
+        // Act
+        TestCryptoFormatter formatter = new TestCryptoFormatter(certificate);
+
+        // Assert
+        Assert.Equal(FixedCertificateIv, formatter.IV);
+        Assert.Equal(FixedCertificateKey, formatter.Key);
+    }
+
+    // ------------------------------------------------------------------
+    // Known-answer data, shared with the AES formatter tests
+    // ------------------------------------------------------------------
+    // These values pin the AES output that stored data depends on. They come from NIST SP 800-38A
+    // or were computed once independently of the formatters; never regenerate them from the
+    // formatters' own output, or the tests stop catching a change.
+
+    /// <summary>
+    /// The key of the CBC-AES256 example of NIST SP 800-38A, Appendix F.2.5.
+    /// </summary>
+    internal static readonly byte[] NistKey = FromHex(
+        "603deb1015ca71be2b73aef0857d7781" +
+        "1f352c073b6108d72d9810a30914dff4");
+
+    /// <summary>
+    /// The IV of NIST SP 800-38A, F.2.5.
+    /// </summary>
+    internal static readonly byte[] NistIv = FromHex("000102030405060708090a0b0c0d0e0f");
+
+    /// <summary>
+    /// The four plaintext blocks of NIST SP 800-38A, F.2.5 (64 bytes).
+    /// </summary>
+    internal static readonly byte[] NistPlaintext = FromHex(
+        "6bc1bee22e409f96e93d7e117393172a" +
+        "ae2d8a571e03ac9c9eb76fac45af8e51" +
+        "30c81c46a35ce411e5fbc1191a0a52ef" +
+        "f69f2445df4f9b17ad2b417be66c3710");
+
+    /// <summary>
+    /// The four ciphertext blocks of NIST SP 800-38A, F.2.5, followed by the block that PKCS7 padding adds
+    /// (80 bytes). The plaintext is whole blocks, so the padding is a full block of 0x10 bytes; its
+    /// ciphertext, AES-256 of that block XOR the fourth ciphertext block, was computed once with a
+    /// single-block AES encryption, independently of the formatters.
+    /// </summary>
+    internal static readonly byte[] NistCiphertextWithPkcs7 = FromHex(
+        "f58c4c04d6e5f1ba779eabfb5f7bfbd6" +
+        "9cfc4e967edb808d679f777bc6702c7d" +
+        "39f23369a9d9bacfa530e26304231461" +
+        "b2eb05e2c39be9fcda6c19078c6a9d1b" +
+        "3f461796d6b0d6b2e0c2a72b4d80e644");
+
+    /// <summary>
+    /// A fixed self-signed RSA 2048 test certificate ("CN=Forge.Next.Formatters.Tests.FixedCertificate"),
+    /// DER in base64, made once on 2026-11-15. Only its public part is here: the formatters derive the IV
+    /// and the key from the public key, so no private key is needed.
+    /// </summary>
+    private const string FixedCertificateBase64 =
+        "MIIC8TCCAdmgAwIBAgIJAMWUR0/FjLzXMA0GCSqGSIb3DQEBCwUAMDcxNTAzBgNVBAMTLEZvcmdlLk5leHQuRm9y" +
+        "bWF0dGVycy5UZXN0cy5GaXhlZENlcnRpZmljYXRlMCAXDTI2MDEwMTAwMDAwMFoYDzIxMjYwMTAxMDAwMDAwWjA3" +
+        "MTUwMwYDVQQDEyxGb3JnZS5OZXh0LkZvcm1hdHRlcnMuVGVzdHMuRml4ZWRDZXJ0aWZpY2F0ZTCCASIwDQYJKoZI" +
+        "hvcNAQEBBQADggEPADCCAQoCggEBAKS+hOJykf/tYbz2jx1na+bNPaXGIDQeb2yt6BNgiBz+evomOry2HR3LuDuK" +
+        "4Xz0te/9iLy+WCsYFOvmTnetg2zlcsPTaPNm2khMYCcxoCW/wpodw7xR/plIpISX05I9YbSqNiPes1a46VBQr4Pt" +
+        "2mAc584XM5zuSdRw+B5LSFa0ICUdTzQ2B3gOMJ69UpSMuMtSXAfRNuKm5djTTzrn2un0R62nHrt5DbxGKjKxUt9K" +
+        "6tLSr4GOslo2kVTyEB7qM1cde+UNGe+EVeXcgc2ID0o3ZJIqX4dV0UxojpTlXEXzRf9I/PQT8IU++H3t2BB/Bskw" +
+        "1mOX0niGfdaW+YRTRLUCAwEAATANBgkqhkiG9w0BAQsFAAOCAQEAk8IHcuSmkx2H71aAcj3/QRKlZmbMMrEFZk9g" +
+        "ym1K1ArNt2w1GOY3MmvR1X7Y+X/2z/3bVMLzCxV5iXAccGN7WIuelMVyoe6/IWvkPBUzaPPKrHylRyQ95lvWEhJx" +
+        "9ZwAZK9beD/ATL0UhcFxflNNvzLJ9jFtmB1Ju99EZH1EDq0xLTw1RdbvtPDsvK9U6y3bWJeyi6O5aUtbt9DK6nS3" +
+        "xgx1R1GWh/2liG8UOw0fikqKakmk18gPXHBrk4yqL5GGr9BIZpsP13uvGH2lQd9HhvjZbyd8SF/yodHUpvAdrBDU" +
+        "jsFHaoTYvj84BYiwej7hBVtVvX/WzPg/6/71/JouOQ==";
+
+    /// <summary>
+    /// The IV that the fixed test certificate gives: the first 16 bytes of its encoded public key.
+    /// </summary>
+    internal static readonly byte[] FixedCertificateIv = FromHex("3082010a0282010100a4be84e27291ff");
+
+    /// <summary>
+    /// The key that the fixed test certificate gives: the last 32 bytes of its encoded public key.
+    /// </summary>
+    internal static readonly byte[] FixedCertificateKey = FromHex(
+        "13f0853ef87dedd8107f06c930d66397" +
+        "d278867dd696f9845344b50203010001");
+
+    /// <summary>
+    /// <see cref="NistPlaintext"/> encrypted with the IV and key of the fixed test certificate (80 bytes,
+    /// with the PKCS7 block), computed once by hand-made CBC from single-block AES encryptions.
+    /// </summary>
+    internal static readonly byte[] FixedCertificateCiphertext = FromHex(
+        "d0955d46203ecb81493bd98f4954644d" +
+        "938edb665540c8b7387c608d070e89ca" +
+        "39f01bd2b4f3967376bf09906bf0c14a" +
+        "1a0b2f72432987bbc21fb5bba5956d81" +
+        "9789da111a115a02ea6f54c70bd7a126");
+
+    /// <summary>
+    /// Loads the fixed test certificate from <see cref="FixedCertificateBase64"/>.
+    /// </summary>
+    /// <returns>The certificate, without a private key; the caller disposes it.</returns>
+    internal static X509Certificate2 LoadFixedCertificate()
+    {
+        byte[] der = Convert.FromBase64String(FixedCertificateBase64);
+#if NET9_0_OR_GREATER
+        return X509CertificateLoader.LoadCertificate(der);
+#else
+        return new X509Certificate2(der);
+#endif
+    }
+
+    /// <summary>
+    /// Converts a hexadecimal string to bytes (<c>Convert.FromHexString</c> does not exist on <c>net48</c>).
+    /// </summary>
+    /// <param name="hex">An even number of hexadecimal digits.</param>
+    /// <returns>The bytes.</returns>
+    internal static byte[] FromHex(string hex)
+    {
+        byte[] bytes = new byte[hex.Length / 2];
+        for (int i = 0; i < bytes.Length; i++)
+        {
+            bytes[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
+        }
+
+        return bytes;
+    }
+
     // ------------------------------------------------------------------
     // Test helpers
     // ------------------------------------------------------------------

@@ -5,20 +5,32 @@ using Xunit;
 namespace Forge.Next.Formatters.Tests;
 
 /// <summary>
-/// Unit tests for <see cref="ServiceCollectionExtensions"/>. These verify the two registration
-/// entry points, <see cref="ServiceCollectionExtensions.AddForgeFormattersAsScoped"/> and
+/// Unit tests for <see cref="ServiceCollectionExtensions"/>. These verify the three registration
+/// entry points, <see cref="ServiceCollectionExtensions.AddForgeFormattersAsTransient"/>,
+/// <see cref="ServiceCollectionExtensions.AddForgeFormattersAsScoped"/> and
 /// <see cref="ServiceCollectionExtensions.AddForgeFormattersAsSingleton"/>: that each registers
 /// every formatter with the correct service type, implementation type and lifetime, that the
-/// registrations can be resolved from a built container, and that both methods return the same
+/// registrations can be resolved from a built container, and that each method returns the same
 /// collection (fluent API).
 /// <para>
-/// Both methods register the same nine services; they differ only in the lifetime applied to the
-/// eight "primary" formatters (scoped vs. singleton). In both methods the SOAP formatter is always
-/// registered as transient.
+/// The three methods register the same nine services; they differ only in the lifetime applied to
+/// the eight "primary" formatters (transient, scoped or singleton). In every method the SOAP
+/// formatter is registered as transient. On <c>net48</c> the two Brotli formatters do not exist, so there are
+/// seven services, and the Brotli cases are compiled for the .NET targets only.
 /// </para>
 /// </summary>
 public class ServiceCollectionExtensionsTests
 {
+    /// <summary>
+    /// The number of services each registration method adds: nine on the .NET targets, seven on
+    /// <c>net48</c>, which has no Brotli formatters.
+    /// </summary>
+#if NETCOREAPP
+    private const int ExpectedServiceCount = 9;
+#else
+    private const int ExpectedServiceCount = 7;
+#endif
+
     // ------------------------------------------------------------------
     // AddForgeFormattersAsScoped
     // ------------------------------------------------------------------
@@ -52,8 +64,10 @@ public class ServiceCollectionExtensionsTests
     [InlineData(typeof(IGZipByteArrayFormatter), typeof(GZipByteArrayFormatter), ServiceLifetime.Scoped)]
     [InlineData(typeof(IGZipStreamFormatter), typeof(GZipStreamFormatter), ServiceLifetime.Scoped)]
     [InlineData(typeof(IXmlDataFormatter<>), typeof(XmlDataFormatter<>), ServiceLifetime.Scoped)]
+#if NETCOREAPP
     [InlineData(typeof(IBrotliStreamFormatter), typeof(BrotliStreamFormatter), ServiceLifetime.Scoped)]
     [InlineData(typeof(IBrotliByteArrayFormatter), typeof(BrotliByteArrayFormatter), ServiceLifetime.Scoped)]
+#endif
     [InlineData(typeof(IAesByteArrayFormatter), typeof(AesByteArrayFormatter), ServiceLifetime.Scoped)]
     [InlineData(typeof(IAesStreamFormatter), typeof(AesStreamFormatter), ServiceLifetime.Scoped)]
     [InlineData(typeof(ISystemJsonFormatter<>), typeof(SystemJsonFormatter<>), ServiceLifetime.Scoped)]
@@ -78,11 +92,11 @@ public class ServiceCollectionExtensionsTests
     }
 
     /// <summary>
-    /// The scoped method must register exactly the nine formatters it advertises and nothing more,
-    /// guarding against accidental extra or duplicate registrations.
+    /// The scoped method must register exactly the formatters it advertises (nine, seven on
+    /// <c>net48</c>) and nothing more, guarding against accidental extra or duplicate registrations.
     /// </summary>
     [Fact]
-    public void AddForgeFormattersAsScoped_RegistersExactlyNineServices_Test()
+    public void AddForgeFormattersAsScoped_RegistersExactlyTheExpectedServices_Test()
     {
         // Arrange
         IServiceCollection services = new ServiceCollection();
@@ -91,7 +105,7 @@ public class ServiceCollectionExtensionsTests
         services.AddForgeFormattersAsScoped();
 
         // Assert
-        Assert.Equal(9, services.Count);
+        Assert.Equal(ExpectedServiceCount, services.Count);
     }
 
     /// <summary>
@@ -113,8 +127,10 @@ public class ServiceCollectionExtensionsTests
         // Assert: every formatter resolves to its concrete implementation type.
         Assert.IsType<GZipByteArrayFormatter>(sp.GetRequiredService<IGZipByteArrayFormatter>());
         Assert.IsType<GZipStreamFormatter>(sp.GetRequiredService<IGZipStreamFormatter>());
+#if NETCOREAPP
         Assert.IsType<BrotliStreamFormatter>(sp.GetRequiredService<IBrotliStreamFormatter>());
         Assert.IsType<BrotliByteArrayFormatter>(sp.GetRequiredService<IBrotliByteArrayFormatter>());
+#endif
         Assert.IsType<AesByteArrayFormatter>(sp.GetRequiredService<IAesByteArrayFormatter>());
         Assert.IsType<AesStreamFormatter>(sp.GetRequiredService<IAesStreamFormatter>());
 
@@ -186,8 +202,10 @@ public class ServiceCollectionExtensionsTests
     [InlineData(typeof(IGZipByteArrayFormatter), typeof(GZipByteArrayFormatter), ServiceLifetime.Singleton)]
     [InlineData(typeof(IGZipStreamFormatter), typeof(GZipStreamFormatter), ServiceLifetime.Singleton)]
     [InlineData(typeof(IXmlDataFormatter<>), typeof(XmlDataFormatter<>), ServiceLifetime.Singleton)]
+#if NETCOREAPP
     [InlineData(typeof(IBrotliStreamFormatter), typeof(BrotliStreamFormatter), ServiceLifetime.Singleton)]
     [InlineData(typeof(IBrotliByteArrayFormatter), typeof(BrotliByteArrayFormatter), ServiceLifetime.Singleton)]
+#endif
     [InlineData(typeof(IAesByteArrayFormatter), typeof(AesByteArrayFormatter), ServiceLifetime.Singleton)]
     [InlineData(typeof(IAesStreamFormatter), typeof(AesStreamFormatter), ServiceLifetime.Singleton)]
     [InlineData(typeof(ISystemJsonFormatter<>), typeof(SystemJsonFormatter<>), ServiceLifetime.Singleton)]
@@ -212,10 +230,11 @@ public class ServiceCollectionExtensionsTests
     }
 
     /// <summary>
-    /// The singleton method must register exactly nine services.
+    /// The singleton method must register exactly the expected services (nine, seven on
+    /// <c>net48</c>).
     /// </summary>
     [Fact]
-    public void AddForgeFormattersAsSingleton_RegistersExactlyNineServices_Test()
+    public void AddForgeFormattersAsSingleton_RegistersExactlyTheExpectedServices_Test()
     {
         // Arrange
         IServiceCollection services = new ServiceCollection();
@@ -224,7 +243,7 @@ public class ServiceCollectionExtensionsTests
         services.AddForgeFormattersAsSingleton();
 
         // Assert
-        Assert.Equal(9, services.Count);
+        Assert.Equal(ExpectedServiceCount, services.Count);
     }
 
     /// <summary>
@@ -241,8 +260,10 @@ public class ServiceCollectionExtensionsTests
         // Act & Assert: everything resolves to its concrete implementation type.
         Assert.IsType<GZipByteArrayFormatter>(provider.GetRequiredService<IGZipByteArrayFormatter>());
         Assert.IsType<GZipStreamFormatter>(provider.GetRequiredService<IGZipStreamFormatter>());
+#if NETCOREAPP
         Assert.IsType<BrotliStreamFormatter>(provider.GetRequiredService<IBrotliStreamFormatter>());
         Assert.IsType<BrotliByteArrayFormatter>(provider.GetRequiredService<IBrotliByteArrayFormatter>());
+#endif
         Assert.IsType<AesByteArrayFormatter>(provider.GetRequiredService<IAesByteArrayFormatter>());
         Assert.IsType<AesStreamFormatter>(provider.GetRequiredService<IAesStreamFormatter>());
         Assert.IsType<XmlDataFormatter<string>>(provider.GetRequiredService<IXmlDataFormatter<string>>());
@@ -274,5 +295,127 @@ public class ServiceCollectionExtensionsTests
         IXmlSoapFormatter<string> firstTransient = provider.GetRequiredService<IXmlSoapFormatter<string>>();
         IXmlSoapFormatter<string> secondTransient = provider.GetRequiredService<IXmlSoapFormatter<string>>();
         Assert.NotSame(firstTransient, secondTransient);
+    }
+
+    // ------------------------------------------------------------------
+    // AddForgeFormattersAsTransient
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The transient extension must also return the same collection instance for fluent chaining.
+    /// </summary>
+    [Fact]
+    public void AddForgeFormattersAsTransient_ReturnsSameServiceCollection_Test()
+    {
+        // Arrange
+        IServiceCollection services = new ServiceCollection();
+
+        // Act
+        IServiceCollection returned = services.AddForgeFormattersAsTransient();
+
+        // Assert
+        Assert.Same(services, returned);
+    }
+
+    /// <summary>
+    /// The transient method registers every formatter, the SOAP formatter included, as transient.
+    /// </summary>
+    /// <param name="serviceType">The service (interface) type expected to be registered.</param>
+    /// <param name="implementationType">The concrete implementation type expected.</param>
+    /// <param name="expectedLifetime">The expected registration lifetime.</param>
+    [Theory]
+    [InlineData(typeof(IGZipByteArrayFormatter), typeof(GZipByteArrayFormatter), ServiceLifetime.Transient)]
+    [InlineData(typeof(IGZipStreamFormatter), typeof(GZipStreamFormatter), ServiceLifetime.Transient)]
+    [InlineData(typeof(IXmlDataFormatter<>), typeof(XmlDataFormatter<>), ServiceLifetime.Transient)]
+#if NETCOREAPP
+    [InlineData(typeof(IBrotliStreamFormatter), typeof(BrotliStreamFormatter), ServiceLifetime.Transient)]
+    [InlineData(typeof(IBrotliByteArrayFormatter), typeof(BrotliByteArrayFormatter), ServiceLifetime.Transient)]
+#endif
+    [InlineData(typeof(IAesByteArrayFormatter), typeof(AesByteArrayFormatter), ServiceLifetime.Transient)]
+    [InlineData(typeof(IAesStreamFormatter), typeof(AesStreamFormatter), ServiceLifetime.Transient)]
+    [InlineData(typeof(ISystemJsonFormatter<>), typeof(SystemJsonFormatter<>), ServiceLifetime.Transient)]
+    [InlineData(typeof(IXmlSoapFormatter<>), typeof(XmlSoapFormatter<>), ServiceLifetime.Transient)]
+    public void AddForgeFormattersAsTransient_RegistersServiceWithExpectedLifetime_Test(
+        System.Type serviceType,
+        System.Type implementationType,
+        ServiceLifetime expectedLifetime)
+    {
+        // Arrange
+        IServiceCollection services = new ServiceCollection();
+
+        // Act
+        services.AddForgeFormattersAsTransient();
+
+        // Assert: exactly one descriptor exists for the service type, with matching details.
+        ServiceDescriptor descriptor = Assert.Single(
+            services, d => d.ServiceType == serviceType);
+
+        Assert.Equal(implementationType, descriptor.ImplementationType);
+        Assert.Equal(expectedLifetime, descriptor.Lifetime);
+    }
+
+    /// <summary>
+    /// The transient method must register exactly the expected services (nine, seven on
+    /// <c>net48</c>).
+    /// </summary>
+    [Fact]
+    public void AddForgeFormattersAsTransient_RegistersExactlyTheExpectedServices_Test()
+    {
+        // Arrange
+        IServiceCollection services = new ServiceCollection();
+
+        // Act
+        services.AddForgeFormattersAsTransient();
+
+        // Assert
+        Assert.Equal(ExpectedServiceCount, services.Count);
+    }
+
+    /// <summary>
+    /// The transient registrations must all be resolvable from a built container.
+    /// </summary>
+    [Fact]
+    public void AddForgeFormattersAsTransient_RegistrationsCanBeResolved_Test()
+    {
+        // Arrange
+        IServiceCollection services = new ServiceCollection();
+        services.AddForgeFormattersAsTransient();
+        using ServiceProvider provider = services.BuildServiceProvider();
+
+        // Act & Assert: everything resolves to its concrete implementation type.
+        Assert.IsType<GZipByteArrayFormatter>(provider.GetRequiredService<IGZipByteArrayFormatter>());
+        Assert.IsType<GZipStreamFormatter>(provider.GetRequiredService<IGZipStreamFormatter>());
+#if NETCOREAPP
+        Assert.IsType<BrotliStreamFormatter>(provider.GetRequiredService<IBrotliStreamFormatter>());
+        Assert.IsType<BrotliByteArrayFormatter>(provider.GetRequiredService<IBrotliByteArrayFormatter>());
+#endif
+        Assert.IsType<AesByteArrayFormatter>(provider.GetRequiredService<IAesByteArrayFormatter>());
+        Assert.IsType<AesStreamFormatter>(provider.GetRequiredService<IAesStreamFormatter>());
+        Assert.IsType<XmlDataFormatter<string>>(provider.GetRequiredService<IXmlDataFormatter<string>>());
+        Assert.IsType<SystemJsonFormatter<string>>(provider.GetRequiredService<ISystemJsonFormatter<string>>());
+        Assert.IsType<XmlSoapFormatter<string>>(provider.GetRequiredService<IXmlSoapFormatter<string>>());
+    }
+
+    /// <summary>
+    /// Transient semantics at runtime: every resolution gives a new instance, even within one scope.
+    /// </summary>
+    [Fact]
+    public void AddForgeFormattersAsTransient_LifetimesBehaveAtRuntime_Test()
+    {
+        // Arrange
+        IServiceCollection services = new ServiceCollection();
+        services.AddForgeFormattersAsTransient();
+        using ServiceProvider provider = services.BuildServiceProvider();
+        using IServiceScope scope = provider.CreateScope();
+
+        // Act
+        IGZipByteArrayFormatter firstGZip = scope.ServiceProvider.GetRequiredService<IGZipByteArrayFormatter>();
+        IGZipByteArrayFormatter secondGZip = scope.ServiceProvider.GetRequiredService<IGZipByteArrayFormatter>();
+        IAesByteArrayFormatter firstAes = scope.ServiceProvider.GetRequiredService<IAesByteArrayFormatter>();
+        IAesByteArrayFormatter secondAes = scope.ServiceProvider.GetRequiredService<IAesByteArrayFormatter>();
+
+        // Assert: a new instance each time.
+        Assert.NotSame(firstGZip, secondGZip);
+        Assert.NotSame(firstAes, secondAes);
     }
 }

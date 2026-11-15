@@ -262,4 +262,156 @@ public class AesByteArrayFormatterTests
         // Assert
         Assert.True(result.IsError);
     }
+
+    // ------------------------------------------------------------------
+    // Cancellation
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// A cancelled token stops the single-stream read. The cancellation comes back as an
+    /// <see cref="ErrorType.Unexpected"/> error made from the cancellation exception, not as a thrown
+    /// exception, because the work runs in <c>ProtectAsync</c> with its defaults.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_CancelledToken_ReturnsCancellationError_Test()
+    {
+        // Arrange: a valid payload, written with a token that is not cancelled.
+        AesByteArrayFormatter formatter = new AesByteArrayFormatter(Iv, Key);
+        using MemoryStream payload = new MemoryStream();
+        Assert.False((await formatter.WriteAsync(new byte[] { 1, 2, 3, 4 }, payload)).IsError);
+        payload.Position = 0;
+
+        // Act
+        ErrorOr<byte[]?> result = await formatter.ReadAsync(payload, new CancellationToken(canceled: true));
+
+        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+    }
+
+    /// <summary>
+    /// A cancelled token stops the two-stream read, with the same cancellation error.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsyncWithOutput_CancelledToken_ReturnsCancellationError_Test()
+    {
+        // Arrange: a valid payload, written with a token that is not cancelled.
+        AesByteArrayFormatter formatter = new AesByteArrayFormatter(Iv, Key);
+        using MemoryStream payload = new MemoryStream();
+        Assert.False((await formatter.WriteAsync(new byte[] { 1, 2, 3, 4 }, payload)).IsError);
+        payload.Position = 0;
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.ReadAsync(payload, output, new CancellationToken(canceled: true));
+
+        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+    }
+
+    /// <summary>
+    /// A cancelled token stops the write, with the same cancellation error.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_CancelledToken_ReturnsCancellationError_Test()
+    {
+        // Arrange
+        AesByteArrayFormatter formatter = new AesByteArrayFormatter(Iv, Key);
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.WriteAsync(new byte[] { 1, 2, 3, 4 }, output, new CancellationToken(canceled: true));
+
+        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+    }
+
+    // ------------------------------------------------------------------
+    // Known answers: the output that stored data depends on
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Pins the output: with the key, IV and plaintext of the CBC-AES256 example of NIST SP 800-38A
+    /// (F.2.5), the formatter writes exactly NIST's four ciphertext blocks and the PKCS7 padding block,
+    /// nothing else (no header, no tag). This proves the output is standard AES-256-CBC with PKCS7; a
+    /// change of it fails here before it makes stored data unreadable.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_NistVector_WritesKnownCiphertext_Test()
+    {
+        // Arrange
+        AesByteArrayFormatter formatter = new AesByteArrayFormatter(CryptoFormatterBaseTests.NistIv, CryptoFormatterBaseTests.NistKey);
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.WriteAsync(CryptoFormatterBaseTests.NistPlaintext, output);
+
+        // Assert
+        Assert.False(result.IsError);
+        Assert.Equal(CryptoFormatterBaseTests.NistCiphertextWithPkcs7, output.ToArray());
+    }
+
+    /// <summary>
+    /// The NIST ciphertext with its PKCS7 block reads back to the NIST plaintext.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_NistVector_ReturnsPlaintext_Test()
+    {
+        // Arrange
+        AesByteArrayFormatter formatter = new AesByteArrayFormatter(CryptoFormatterBaseTests.NistIv, CryptoFormatterBaseTests.NistKey);
+        using MemoryStream input = new MemoryStream(CryptoFormatterBaseTests.NistCiphertextWithPkcs7);
+
+        // Act
+        ErrorOr<byte[]?> result = await formatter.ReadAsync(input);
+
+        // Assert
+        Assert.False(result.IsError);
+        Assert.Equal(CryptoFormatterBaseTests.NistPlaintext, result.Value);
+    }
+
+    /// <summary>
+    /// Pins the output with a certificate: the formatter built from the fixed test certificate writes the
+    /// known ciphertext, computed once from the IV and key that the certificate gives. Together with
+    /// <see cref="CryptoFormatterBaseTests.Certificate_FixedCertificate_DerivesKnownIvAndKey_Test"/> it keeps
+    /// data encrypted with a certificate readable.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_FixedCertificate_WritesKnownCiphertext_Test()
+    {
+        // Arrange
+        using X509Certificate2 certificate = CryptoFormatterBaseTests.LoadFixedCertificate();
+        AesByteArrayFormatter formatter = new AesByteArrayFormatter(certificate);
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.WriteAsync(CryptoFormatterBaseTests.NistPlaintext, output);
+
+        // Assert
+        Assert.False(result.IsError);
+        Assert.Equal(CryptoFormatterBaseTests.FixedCertificateCiphertext, output.ToArray());
+    }
+
+    /// <summary>
+    /// The known ciphertext of the fixed test certificate reads back to the plaintext.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_FixedCertificate_ReturnsPlaintext_Test()
+    {
+        // Arrange
+        using X509Certificate2 certificate = CryptoFormatterBaseTests.LoadFixedCertificate();
+        AesByteArrayFormatter formatter = new AesByteArrayFormatter(certificate);
+        using MemoryStream input = new MemoryStream(CryptoFormatterBaseTests.FixedCertificateCiphertext);
+
+        // Act
+        ErrorOr<byte[]?> result = await formatter.ReadAsync(input);
+
+        // Assert
+        Assert.False(result.IsError);
+        Assert.Equal(CryptoFormatterBaseTests.NistPlaintext, result.Value);
+    }
 }

@@ -178,4 +178,48 @@ public class XmlSoapFormatterTests
         // Assert
         Assert.True(result.IsError);
     }
+
+    // ------------------------------------------------------------------
+    // Cancellation
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The read runs the synchronous <see cref="SoapFormatter.Deserialize(Stream)"/> and does not use the
+    /// token, so a cancelled token does not stop it: the read succeeds. This pins the behaviour as it is.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_CancelledToken_IsIgnored_Test()
+    {
+        // Arrange: valid SOAP, written with a token that is not cancelled.
+        XmlSoapFormatter<SoapSampleData> formatter = new XmlSoapFormatter<SoapSampleData>();
+        using MemoryStream payload = new MemoryStream();
+        Assert.False((await formatter.WriteAsync(new SoapSampleData { Name = "Forge", Value = 1 }, payload)).IsError);
+        payload.Position = 0;
+
+        // Act
+        ErrorOr<SoapSampleData?> result = await formatter.ReadAsync(payload, new CancellationToken(canceled: true));
+
+        // Assert: the object is read as if the token were not cancelled.
+        Assert.False(result.IsError);
+        Assert.Equal("Forge", result.Value!.Name);
+    }
+
+    /// <summary>
+    /// The write runs the synchronous <see cref="SoapFormatter.Serialize(Stream, object)"/> and does not
+    /// use the token either: a cancelled token does not stop it. This pins the behaviour as it is.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_CancelledToken_IsIgnored_Test()
+    {
+        // Arrange
+        XmlSoapFormatter<SoapSampleData> formatter = new XmlSoapFormatter<SoapSampleData>();
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.WriteAsync(new SoapSampleData { Name = "Forge", Value = 1 }, output, new CancellationToken(canceled: true));
+
+        // Assert: the object is written as if the token were not cancelled.
+        Assert.False(result.IsError);
+        Assert.True(output.Length > 0);
+    }
 }

@@ -203,4 +203,50 @@ public class SystemJsonFormatterTests
         // Assert
         Assert.True(result.IsError);
     }
+
+    // ------------------------------------------------------------------
+    // Cancellation
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// A cancelled token stops the read: <see cref="JsonSerializer"/> observes it. The cancellation comes
+    /// back as an <see cref="ErrorType.Unexpected"/> error made from the cancellation exception, not as a
+    /// thrown exception, because the work runs in <c>ProtectAsync</c> with its defaults.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_CancelledToken_ReturnsCancellationError_Test()
+    {
+        // Arrange: valid JSON, written with a token that is not cancelled.
+        SystemJsonFormatter<JsonSampleData> formatter = new SystemJsonFormatter<JsonSampleData>();
+        using MemoryStream payload = new MemoryStream();
+        Assert.False((await formatter.WriteAsync(new JsonSampleData { Name = "Forge", Value = 1 }, payload)).IsError);
+        payload.Position = 0;
+
+        // Act
+        ErrorOr<JsonSampleData?> result = await formatter.ReadAsync(payload, new CancellationToken(canceled: true));
+
+        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+    }
+
+    /// <summary>
+    /// A cancelled token stops the write, with the same cancellation error.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_CancelledToken_ReturnsCancellationError_Test()
+    {
+        // Arrange
+        SystemJsonFormatter<JsonSampleData> formatter = new SystemJsonFormatter<JsonSampleData>();
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.WriteAsync(new JsonSampleData { Name = "Forge", Value = 1 }, output, new CancellationToken(canceled: true));
+
+        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+    }
 }
