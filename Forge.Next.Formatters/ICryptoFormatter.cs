@@ -32,4 +32,17 @@ public interface ICryptoFormatter<T> : IDataFormatter<T>
     /// </summary>
     byte[] Key { get; set; }
 
+    /// <summary>
+    /// Gets or sets the format that <c>WriteAsync</c> writes (since 3.4.0). The default is
+    /// <see cref="AesOutputFormat.Legacy"/>, the format of the earlier versions; <c>ReadAsync</c> recognizes either
+    /// format by its header, whatever this property is.
+    /// </summary>
+    AesOutputFormat OutputFormat { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether <c>ReadAsync</c> accepts input in the <see cref="AesOutputFormat.Legacy"/> format, which is
+    /// not authenticated (since 3.4.0). The default is <c>true</c>, so data written by earlier versions stays readable.
+    /// </summary>
+    bool AcceptUnauthenticated { get; set; }
+
 }

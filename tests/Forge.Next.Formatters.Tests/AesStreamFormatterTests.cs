@@ -469,6 +469,142 @@ public class AesStreamFormatterTests
     }
 
     // ------------------------------------------------------------------
+    // The authenticated format (AesOutputFormat.Authenticated, since 3.4.0)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// The known-answer message of the authenticated format reads back to the plaintext through the single-stream read,
+    /// whose returned stream is at its end, as in the legacy format.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_AuthenticatedKnownAnswer_ReturnsPlaintextAtTheEnd_Test()
+    {
+        // Arrange
+        AesStreamFormatter formatter = new AesStreamFormatter(Iv, CryptoFormatterBaseTests.NistKey);
+        using MemoryStream input = new MemoryStream(CryptoFormatterBaseTests.AuthenticatedMessage);
+
+        // Act
+        ErrorOr<Stream?> result = await formatter.ReadAsync(input);
+
+        // Assert
+        Assert.False(result.IsError);
+        using Stream plain = result.Value!;
+        Assert.Equal(plain.Length, plain.Position);
+        Assert.Equal(CryptoFormatterBaseTests.NistPlaintext, ReadAllBytes(plain));
+    }
+
+    /// <summary>
+    /// The known-answer message reads back to the plaintext through the two-stream read.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsyncWithOutput_AuthenticatedKnownAnswer_WritesPlaintext_Test()
+    {
+        // Arrange
+        AesStreamFormatter formatter = new AesStreamFormatter(Iv, CryptoFormatterBaseTests.NistKey);
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.ReadAsync(new MemoryStream(CryptoFormatterBaseTests.AuthenticatedMessage), output);
+
+        // Assert
+        Assert.False(result.IsError);
+        Assert.Equal(CryptoFormatterBaseTests.NistPlaintext, output.ToArray());
+    }
+
+    /// <summary>
+    /// A stream written in the authenticated format reads back with the same key.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_Authenticated_RoundTrips_Test()
+    {
+        // Arrange
+        AesStreamFormatter formatter = new AesStreamFormatter(Iv, Key) { OutputFormat = AesOutputFormat.Authenticated };
+        byte[] original = Encoding.UTF8.GetBytes(new string('A', 1000) + "-authenticated");
+        using MemoryStream source = new MemoryStream(original);
+        using MemoryStream message = new MemoryStream();
+
+        // Act
+        Assert.False((await formatter.WriteAsync(source, message)).IsError);
+        message.Position = 0;
+        using MemoryStream output = new MemoryStream();
+        ErrorOr<Success> result = await formatter.ReadAsync(message, output);
+
+        // Assert
+        Assert.False(result.IsError);
+        Assert.Equal(original, output.ToArray());
+    }
+
+    /// <summary>
+    /// A changed tag gives an error and nothing reaches the output, when the unauthenticated format is refused.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsyncWithOutput_AuthenticatedChangedTag_ReturnsErrorAndWritesNothing_Test()
+    {
+        // Arrange
+        AesStreamFormatter formatter = new AesStreamFormatter(Iv, CryptoFormatterBaseTests.NistKey) { AcceptUnauthenticated = false };
+        byte[] message = (byte[])CryptoFormatterBaseTests.AuthenticatedMessage.Clone();
+        message[message.Length - 1] ^= 0x80;
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.ReadAsync(new MemoryStream(message), output);
+
+        // Assert
+        Assert.True(result.IsError);
+        Assert.Equal(0, output.Length);
+    }
+
+    /// <summary>
+    /// A stream that cannot seek is read into memory first, so both formats are recognized and read from it.
+    /// </summary>
+    /// <param name="authenticated"><c>true</c> for the authenticated known-answer message, <c>false</c> for the legacy one.</param>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ReadAsyncWithOutput_NonSeekableInput_ReadsBothFormats_Test(bool authenticated)
+    {
+        // Arrange
+        AesStreamFormatter formatter = new AesStreamFormatter(CryptoFormatterBaseTests.NistIv, CryptoFormatterBaseTests.NistKey);
+        byte[] message = authenticated ? CryptoFormatterBaseTests.AuthenticatedMessage : CryptoFormatterBaseTests.NistCiphertextWithPkcs7;
+        using Stream input = new NonSeekableStream(message);
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.ReadAsync(input, output);
+
+        // Assert
+        Assert.False(result.IsError);
+        Assert.Equal(CryptoFormatterBaseTests.NistPlaintext, output.ToArray());
+    }
+
+    /// <summary>
+    /// A seekable input is read from its current position, not from its start: the formatter looks at the first bytes
+    /// and goes back to where it started, for both formats.
+    /// </summary>
+    /// <param name="authenticated"><c>true</c> for the authenticated known-answer message, <c>false</c> for the legacy one.</param>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ReadAsyncWithOutput_InputNotAtItsStart_ReadsFromItsPosition_Test(bool authenticated)
+    {
+        // Arrange: three bytes of something else before the message.
+        AesStreamFormatter formatter = new AesStreamFormatter(CryptoFormatterBaseTests.NistIv, CryptoFormatterBaseTests.NistKey);
+        byte[] message = authenticated ? CryptoFormatterBaseTests.AuthenticatedMessage : CryptoFormatterBaseTests.NistCiphertextWithPkcs7;
+        using MemoryStream input = new MemoryStream();
+        input.Write(new byte[] { 7, 7, 7 }, 0, 3);
+        input.Write(message, 0, message.Length);
+        input.Position = 3;
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.ReadAsync(input, output);
+
+        // Assert
+        Assert.False(result.IsError);
+        Assert.Equal(CryptoFormatterBaseTests.NistPlaintext, output.ToArray());
+    }
+
+    // ------------------------------------------------------------------
     // Test helpers
     // ------------------------------------------------------------------
 
@@ -487,5 +623,33 @@ public class AesStreamFormatterTests
         using MemoryStream buffer = new MemoryStream();
         stream.CopyTo(buffer);
         return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// A readable stream over a byte array that cannot seek, as a network stream cannot.
+    /// </summary>
+    private sealed class NonSeekableStream : Stream
+    {
+        private readonly MemoryStream _inner;
+
+        public NonSeekableStream(byte[] data) { _inner = new MemoryStream(data); }
+
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => _inner.Read(buffer, offset, count);
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => _inner.ReadAsync(buffer, offset, count, cancellationToken);
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _inner.Dispose();
+            base.Dispose(disposing);
+        }
     }
 }

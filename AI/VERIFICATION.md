@@ -5,7 +5,7 @@
 | Check | How | What it proves |
 | --- | --- | --- |
 | Build | `dotnet build Forge.Next.Formatters.slnx -c Debug --no-incremental` | 0 warnings for every target (`net48`, `net8.0`, `net9.0`, `net10.0`, `net11.0`), so every public member is documented (CS1591). Needs the .NET 11 SDK or later. A Debug build does not pack. |
-| Tests | `dotnet test tests/Forge.Next.Formatters.Tests` | Since 2026-11-15 on every target of the library: 221 test cases (183 test methods) on each .NET target, 188 on `net48`, which has no Brotli tests. Before, `net10.0` only. |
+| Tests | `dotnet test tests/Forge.Next.Formatters.Tests` | Since 2026-11-15 on every target of the library: 253 test cases (199 test methods) on each .NET target, 220 on `net48`, which has no Brotli tests. Before, `net10.0` only. |
 | Package contents | `dotnet build Forge.Next.Formatters/Forge.Next.Formatters.csproj -c Release -p:PackageOutputPath=<a folder outside the repository>\`, then open the `.nupkg` as a zip | `lib/<target>/` for every target, each with a complete `Forge.Next.Formatters.xml`; the README and the icon; the `.nuspec` has `<license type="expression">Apache-2.0</license>`, and its dependency groups match the table in `CLAUDE.md`. `artifacts/` stays untouched: git ignores it, so compare its files' hashes before and after. |
 
 ## What was run
@@ -42,6 +42,9 @@
 | 2026-11-15 | B3: the README's cancellation examples, in the scratch console program | Windows 11, `net10.0` | A cancelled GZip write throws `TaskCanceledException`; a cancelled XML write throws and leaves the output empty; a cancelled `FileInfo` write throws and leaves the existing 3-byte file as it was |
 | 2026-11-15 | B2 (a): build and tests | Windows 11, SDK 11.0.100, the installed .NET 8, 9, 10 and 11 runtimes and .NET Framework 4.8 | With the attributes and before the test changes: the library 0 warnings, the tests 13 CS0618 warnings (3 files). After the targeted `#pragma` suppressions: 0 warnings, 0 errors. 221/221 on the .NET targets, 188/188 on `net48`; the A5 certificate outputs unchanged |
 | 2026-11-15 | B2 (a): the caller's view, in the scratch console program | Windows 11, `net10.0` | A call to `new AesByteArrayFormatter(certificate)` and a read of `ICryptoFormatter<T>.Certificate` through the interface give CS0618 with the message; the README recipe's `#pragma` silences it |
+| 2026-11-15 | B1: the known-answer message, made with a PowerShell script in the session's scratchpad | Windows 11, PowerShell 7 on .NET 10.0.15 | The keys derived with HMAC-SHA256 over the two labels; the hand-made CBC equal to the platform's `EncryptCbc`; a 132-byte message (header, IV `f0..ff`, 80-byte ciphertext of the NIST plaintext, tag) |
+| 2026-11-15 | B1: build and tests | Windows 11, SDK 11.0.100, the installed .NET 8, 9, 10 and 11 runtimes and .NET Framework 4.8 | 0 warnings, 0 errors. With only the library changed, 2 existing tests failed (a non-readable fake stream gave success); after the `CanRead` check all passed. With the new tests: 253/253 on the .NET targets, 220/220 on `net48`; the known-answer message reads back on every target |
+| 2026-11-15 | B1: the writer's output, checked independently in the scratch console program | Windows 11, `net10.0` | A 46-byte plaintext written as `Authenticated`: header `464E4602`, 100 bytes, the tag recomputed with HMAC-SHA256 under the independently derived key matches, and `DecryptCbc` with the derived encryption key returns the plaintext |
 
 ## Not verified yet
 

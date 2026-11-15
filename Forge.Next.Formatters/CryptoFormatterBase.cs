@@ -1,7 +1,9 @@
 ﻿using ErrorOr;
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 
 namespace Forge.Next.Formatters;
 
@@ -20,6 +22,18 @@ public abstract class CryptoFormatterBase<T> : ICryptoFormatter<T>
 
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     private byte[] _key = new byte[Consts.LengthOfKey];
+
+    [DebuggerBrowsable(DebuggerBrowsableState.Never)]
+    private AesOutputFormat _outputFormat = AesOutputFormat.Legacy;
+
+    // The authenticated format (AesOutputFormat.Authenticated, since 3.4.0): the header "FNF" 0x02, a random IV, the
+    // AES-256-CBC-PKCS7 ciphertext, and an HMAC-SHA256 tag over all of them. The encryption and the authentication key
+    // are HMAC-SHA256 of Key over the two labels. Changing any of these makes stored data unreadable.
+    private static readonly byte[] AuthenticatedHeader = { 0x46, 0x4E, 0x46, 0x02 };
+    private static readonly byte[] EncryptionKeyLabel = Encoding.ASCII.GetBytes("Forge.Next.Formatters.Aes.Encryption");
+    private static readonly byte[] AuthenticationKeyLabel = Encoding.ASCII.GetBytes("Forge.Next.Formatters.Aes.Authentication");
+    private const int AuthenticationTagLength = 32;
+    private const int AesBlockLength = 16;
 
     /// <summary>
     /// Gets or sets the buffer size used for reading and writing data in the formatter. The default value is defined in Consts.DefaultBufferSize.
@@ -121,6 +135,32 @@ public abstract class CryptoFormatterBase<T> : ICryptoFormatter<T>
     }
 
     /// <summary>
+    /// Gets or sets the format that <c>WriteAsync</c> writes (since 3.4.0). The default,
+    /// <see cref="AesOutputFormat.Legacy"/>, writes the format of the earlier versions;
+    /// <see cref="AesOutputFormat.Authenticated"/> writes the authenticated format, with a random IV per message.
+    /// <c>ReadAsync</c> recognizes either format by its header, whatever this property is.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">The value is not a defined <see cref="AesOutputFormat"/>.</exception>
+    public AesOutputFormat OutputFormat
+    {
+        get { return _outputFormat; }
+        set
+        {
+            if (value != AesOutputFormat.Legacy && value != AesOutputFormat.Authenticated) throw new ArgumentOutOfRangeException(nameof(value));
+
+            _outputFormat = value;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets whether <c>ReadAsync</c> accepts input in the <see cref="AesOutputFormat.Legacy"/> format, which is
+    /// not authenticated (since 3.4.0). The default is <c>true</c>, so data written by earlier versions stays readable.
+    /// Set it to <c>false</c> once all data is in the <see cref="AesOutputFormat.Authenticated"/> format: input without a
+    /// valid authentication tag then gives an error.
+    /// </summary>
+    public bool AcceptUnauthenticated { get; set; } = true;
+
+    /// <summary>
     /// Reads and decrypts data from the specified input stream and returns the deserialized object of type T. The method uses the configured IV and key values for decryption. If a certificate is set, the IV and key values are derived from the public key of the certificate.
     /// </summary>
     /// <param name="inputStream">The input stream to read data from.</param>
@@ -148,5 +188,281 @@ public abstract class CryptoFormatterBase<T> : ICryptoFormatter<T>
     /// <returns>A task that represents the asynchronous write operation. The task result contains an ErrorOr&lt;Success&gt; indicating the success or failure of the operation.</returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public abstract Task<ErrorOr<Success>> WriteAsync(T data, Stream outputStream, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Encrypts the rest of <paramref name="plaintext"/> in the <see cref="AesOutputFormat.Authenticated"/> format and
+    /// writes the message to <paramref name="outputStream"/>. The ciphertext is built in memory first, because the tag
+    /// covers all of it, so nothing is written to the output before the encryption has finished.
+    /// </summary>
+    /// <param name="plaintext">The data to encrypt, read from its current position.</param>
+    /// <param name="outputStream">The stream the message is written to; it stays open.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that completes when the message is written.</returns>
+    private protected async Task WriteAuthenticatedAsync(Stream plaintext, Stream outputStream, CancellationToken cancellationToken)
+    {
+        byte[] iv = new byte[Consts.LengthOfIV];
+        using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+        {
+            rng.GetBytes(iv);
+        }
+
+        byte[] encryptionKey = DeriveKey(EncryptionKeyLabel);
+        byte[] authenticationKey = DeriveKey(AuthenticationKeyLabel);
+
+        try
+        {
+            using MemoryStream ciphertext = new MemoryStream();
+
+            using (Aes aes = CreateAuthenticatedAes(encryptionKey, iv))
+            using (ICryptoTransform encryptor = aes.CreateEncryptor())
+            {
+                CryptoStream csEncrypt = new CryptoStream(ciphertext, encryptor, CryptoStreamMode.Write);
+
+                byte[] buffer = new byte[BufferSize];
+                int numRead = 0;
+
+                while ((numRead = await plaintext.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
+                {
+                    await csEncrypt.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
+                }
+#if NETCOREAPP
+                await csEncrypt.FlushFinalBlockAsync(cancellationToken).ConfigureAwait(false);
+#else
+                csEncrypt.FlushFinalBlock();
+#endif
+            }
+
+            byte[] tag;
+            using (HMACSHA256 hmac = new HMACSHA256(authenticationKey))
+            {
+                hmac.TransformBlock(AuthenticatedHeader, 0, AuthenticatedHeader.Length, null, 0);
+                hmac.TransformBlock(iv, 0, iv.Length, null, 0);
+                hmac.TransformFinalBlock(ciphertext.GetBuffer(), 0, (int)ciphertext.Length);
+                tag = hmac.Hash!;
+            }
+
+            await outputStream.WriteAsync(AuthenticatedHeader, 0, AuthenticatedHeader.Length, cancellationToken).ConfigureAwait(false);
+            await outputStream.WriteAsync(iv, 0, iv.Length, cancellationToken).ConfigureAwait(false);
+            await outputStream.WriteAsync(ciphertext.GetBuffer(), 0, (int)ciphertext.Length, cancellationToken).ConfigureAwait(false);
+            await outputStream.WriteAsync(tag, 0, tag.Length, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            Array.Clear(encryptionKey, 0, encryptionKey.Length);
+            Array.Clear(authenticationKey, 0, authenticationKey.Length);
+        }
+    }
+
+    /// <summary>
+    /// Opens the encrypted input of a read and decides its format by the header.
+    /// <list type="bullet">
+    ///   <item>No header: the <see cref="AesOutputFormat.Legacy"/> format, refused unless
+    ///   <see cref="AcceptUnauthenticated"/> is <c>true</c>.</item>
+    ///   <item>The header: the whole message is read into memory, and its tag checked in constant time before anything
+    ///   is decrypted. A wrong tag is refused, unless the current format is accepted: then the message is read the
+    ///   <see cref="AesOutputFormat.Legacy"/> way, in memory, because a message of that format starts with the header
+    ///   bytes by chance once in 2^32.</item>
+    /// </list>
+    /// A stream that cannot seek is read into memory first, so its first bytes can be looked at and read again.
+    /// </summary>
+    /// <param name="inputStream">The encrypted input, read from its current position.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>
+    /// Either the plaintext, when the input was decrypted in memory, or the stream to decrypt the
+    /// <see cref="AesOutputFormat.Legacy"/> way, at the position where the input started: <paramref name="inputStream"/>
+    /// itself, or the in-memory copy of it, which the caller disposes.
+    /// </returns>
+    /// <exception cref="CryptographicException">The input is refused (see above).</exception>
+    private protected async Task<(byte[]? Plaintext, Stream? Legacy)> OpenAsync(Stream inputStream, CancellationToken cancellationToken)
+    {
+        // As the CryptoStream constructor did before the input was looked at first.
+        if (!inputStream.CanRead) throw new ArgumentException("The input stream is not readable.", nameof(inputStream));
+
+        Stream source = inputStream;
+        bool disposeSource = false;
+
+        if (!inputStream.CanSeek)
+        {
+            MemoryStream copy = new MemoryStream();
+            source = copy;
+            disposeSource = true;
+            await CopyAsync(inputStream, copy, cancellationToken).ConfigureAwait(false);
+            copy.Position = 0;
+        }
+
+        try
+        {
+            long start = source.Position;
+            byte[] head = new byte[AuthenticatedHeader.Length];
+            int headLength = await ReadBlockAsync(source, head, cancellationToken).ConfigureAwait(false);
+            source.Position = start;
+
+            if (headLength != head.Length || !FixedTimeEquals(AuthenticatedHeader, head, 0))
+            {
+                if (!AcceptUnauthenticated) throw new CryptographicException("The input is not in the authenticated AES format, and AcceptUnauthenticated is false.");
+
+                disposeSource = false;
+                return (null, source);
+            }
+
+            byte[] message;
+            using (MemoryStream all = new MemoryStream())
+            {
+                await CopyAsync(source, all, cancellationToken).ConfigureAwait(false);
+                message = all.ToArray();
+            }
+
+            byte[]? plaintext = OpenAuthenticated(message);
+            if (plaintext is not null) return (plaintext, null);
+
+            if (!AcceptUnauthenticated) throw new CryptographicException("The authentication tag of the AES input does not match.");
+
+            return (DecryptLegacy(message), null);
+        }
+        finally
+        {
+            if (disposeSource) source.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Checks the tag of a message in the <see cref="AesOutputFormat.Authenticated"/> format and decrypts it.
+    /// </summary>
+    /// <param name="message">The whole message, header included.</param>
+    /// <returns>The plaintext, or <c>null</c> when the message is too short or its tag does not match.</returns>
+    private byte[]? OpenAuthenticated(byte[] message)
+    {
+        int headerAndIvLength = AuthenticatedHeader.Length + Consts.LengthOfIV;
+        int ciphertextLength = message.Length - headerAndIvLength - AuthenticationTagLength;
+        if (ciphertextLength < AesBlockLength || ciphertextLength % AesBlockLength != 0) return null;
+
+        byte[] encryptionKey = DeriveKey(EncryptionKeyLabel);
+        byte[] authenticationKey = DeriveKey(AuthenticationKeyLabel);
+
+        try
+        {
+            byte[] expectedTag;
+            using (HMACSHA256 hmac = new HMACSHA256(authenticationKey))
+            {
+                expectedTag = hmac.ComputeHash(message, 0, message.Length - AuthenticationTagLength);
+            }
+
+            if (!FixedTimeEquals(expectedTag, message, message.Length - AuthenticationTagLength)) return null;
+
+            byte[] iv = new byte[Consts.LengthOfIV];
+            Buffer.BlockCopy(message, AuthenticatedHeader.Length, iv, 0, iv.Length);
+
+            using Aes aes = CreateAuthenticatedAes(encryptionKey, iv);
+            using ICryptoTransform decryptor = aes.CreateDecryptor();
+            return decryptor.TransformFinalBlock(message, headerAndIvLength, ciphertextLength);
+        }
+        finally
+        {
+            Array.Clear(encryptionKey, 0, encryptionKey.Length);
+            Array.Clear(authenticationKey, 0, authenticationKey.Length);
+        }
+    }
+
+    /// <summary>
+    /// Decrypts a whole message of the <see cref="AesOutputFormat.Legacy"/> format in memory, with <see cref="IV"/> and
+    /// <see cref="Key"/>, as the formatters do while streaming.
+    /// </summary>
+    /// <param name="message">The ciphertext.</param>
+    /// <returns>The plaintext.</returns>
+    private byte[] DecryptLegacy(byte[] message)
+    {
+        using Aes aes = Aes.Create();
+        aes.IV = IV;
+        aes.Key = Key;
+
+        using ICryptoTransform decryptor = aes.CreateDecryptor();
+        return decryptor.TransformFinalBlock(message, 0, message.Length);
+    }
+
+    /// <summary>
+    /// Derives a key of the <see cref="AesOutputFormat.Authenticated"/> format: HMAC-SHA256 of <see cref="Key"/> over
+    /// <paramref name="label"/>.
+    /// </summary>
+    /// <param name="label">The fixed label of the key.</param>
+    /// <returns>The 32-byte key; the caller clears it after use.</returns>
+    private byte[] DeriveKey(byte[] label)
+    {
+        using HMACSHA256 hmac = new HMACSHA256(Key);
+        return hmac.ComputeHash(label);
+    }
+
+    /// <summary>
+    /// Creates the AES-256-CBC instance with PKCS7 padding of the <see cref="AesOutputFormat.Authenticated"/> format.
+    /// </summary>
+    /// <param name="key">The derived encryption key.</param>
+    /// <param name="iv">The IV of the message.</param>
+    /// <returns>The configured instance; the caller disposes it.</returns>
+    private static Aes CreateAuthenticatedAes(byte[] key, byte[] iv)
+    {
+        Aes aes = Aes.Create();
+        aes.Mode = CipherMode.CBC;
+        aes.Padding = PaddingMode.PKCS7;
+        aes.Key = key;
+        aes.IV = iv;
+        return aes;
+    }
+
+    /// <summary>
+    /// Compares <paramref name="expected"/> with the bytes of <paramref name="actual"/> from
+    /// <paramref name="actualOffset"/> in a time that does not depend on where they differ.
+    /// </summary>
+    /// <param name="expected">The expected bytes.</param>
+    /// <param name="actual">The array holding the bytes to compare.</param>
+    /// <param name="actualOffset">Where the bytes to compare start in <paramref name="actual"/>.</param>
+    /// <returns><c>true</c> when all bytes are equal.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining | MethodImplOptions.NoOptimization)]
+    private static bool FixedTimeEquals(byte[] expected, byte[] actual, int actualOffset)
+    {
+        int difference = 0;
+        for (int i = 0; i < expected.Length; i++)
+        {
+            difference |= expected[i] ^ actual[actualOffset + i];
+        }
+
+        return difference == 0;
+    }
+
+    /// <summary>
+    /// Copies the rest of <paramref name="source"/> to <paramref name="destination"/> in <see cref="BufferSize"/> chunks.
+    /// </summary>
+    /// <param name="source">The stream to copy from.</param>
+    /// <param name="destination">The stream to copy to.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>A task that completes when the copy is done.</returns>
+    private async Task CopyAsync(Stream source, Stream destination, CancellationToken cancellationToken)
+    {
+        byte[] buffer = new byte[BufferSize];
+        int numRead = 0;
+
+        while ((numRead = await source.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
+        {
+            await destination.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Reads until <paramref name="buffer"/> is full or the stream ends.
+    /// </summary>
+    /// <param name="source">The stream to read.</param>
+    /// <param name="buffer">The buffer to fill.</param>
+    /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
+    /// <returns>The number of bytes read.</returns>
+    private static async Task<int> ReadBlockAsync(Stream source, byte[] buffer, CancellationToken cancellationToken)
+    {
+        int total = 0;
+        int numRead = 0;
+
+        while (total < buffer.Length && (numRead = await source.ReadAsync(buffer, total, buffer.Length - total, cancellationToken).ConfigureAwait(false)) != 0)
+        {
+            total += numRead;
+        }
+
+        return total;
+    }
 
 }

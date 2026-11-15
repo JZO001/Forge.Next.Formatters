@@ -335,3 +335,47 @@ rule confirmed in B6.
 
 **Compatibility:** callers of these members get compiler warning CS0618; a build that treats warnings as errors fails
 until the use is suppressed or replaced. No signature or behaviour changed.
+
+## 2026-11-15 – The authenticated AES format: decided (B1, in progress)
+
+**Decided by Zoltán:** the format of the plan's B1, the same on every target (`AesGcm` and HKDF do not exist on
+`net48`): a 4-byte header (`FNF` and the version byte `0x02`), a random 16-byte IV per message, the AES-256-CBC
+ciphertext with PKCS7, and a 32-byte HMAC-SHA256 tag over the header, the IV and the ciphertext (encrypt-then-MAC). The
+encryption and the authentication key are derived from `Key` with HMAC-SHA256 over two fixed labels. Reading checks the
+tag in constant time before it decrypts; the stream formatter buffers its input for that. Input without the header is
+read the current way unless the caller refuses it. Refinement, accepted: a header with a wrong tag falls back to the
+current format when that is accepted, because a message of the current format starts with the header bytes by chance
+once in 2^32; this does not weaken anything, since such input is accepted unauthenticated anyway.
+
+**Decided by Zoltán:** the new format is opt-in (minor), so it goes into 3.4.0; the default may switch in a later major
+version.
+
+## 2026-11-15 – 3.4.0: the authenticated AES format (B1)
+
+**Asked by Zoltán:** B1 as decided above, with the API of option (a): a public enum `AesOutputFormat` (`Legacy = 0`,
+`Authenticated = 1`, its own file) and, on `ICryptoFormatter<T>` and `CryptoFormatterBase<T>`, `OutputFormat` (default
+`Legacy`; the setter throws `ArgumentOutOfRangeException` for an undefined value) and `AcceptUnauthenticated` (default
+`true`).
+- `CryptoFormatterBase<T>` holds the format as `private protected` helpers, so no other public member is added:
+  `WriteAuthenticatedAsync` builds the ciphertext in memory and writes header, IV, ciphertext and tag; `OpenAsync`
+  decides the format of a read by the header, checks the tag in constant time, and returns either the plaintext or the
+  stream to decrypt the `Legacy` way. The derived keys are cleared after use. The two AES formatters call them; their
+  `Legacy` code is unchanged.
+- The read checks `CanRead` first: without it, a non-readable fake stream gave an empty success once the input was
+  looked at before the `CryptoStream` was made (found by the existing `ReadAsync_NonReadableStream_ReturnsError_Test`).
+- A seekable input is read 4 bytes ahead and set back; one that cannot seek is copied into memory first, in both
+  formats.
+
+**Tests:** the known-answer message of the authenticated format, made independently with a PowerShell script (HMAC
+key derivation, hand-made CBC, HMAC tag; the hand-made CBC equal to the platform's `EncryptCbc`), reads back on every
+target; the writer's output was also checked independently in the scratch program (tag and plaintext). New tests: the
+defaults and the setter check; the layout and the round trip of a write, read by a formatter with another IV; a new IV
+per message; a flipped bit in the header, IV, ciphertext or tag, and a cut-off message, give an error, with nothing
+written when the unauthenticated format is refused; `Legacy` input refused when not accepted; a `Legacy` message whose
+first ciphertext block is the header (made by choosing that block) is read the `Legacy` way when accepted; non-seekable
+input and input not at its start, in both formats. 253 test cases on the .NET targets, 220 on `net48`.
+
+**Compatibility:** `ICryptoFormatter<T>` has two new members, so a class of an application that implements it no
+longer compiles until it adds them; the library's classes and every caller are unaffected. The default output stays
+`Legacy`, byte for byte (the A5 tests). Reading now recognizes the authenticated format, copies a non-seekable input
+into memory first, and refuses a non-readable one up front. A minor version (3.4.0).

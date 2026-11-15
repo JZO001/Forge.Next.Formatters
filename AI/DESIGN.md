@@ -2,19 +2,20 @@
 
 ## The parts
 
-All 24 types are public, one per file, in the namespace `Forge.Next.Formatters`.
+All 25 types are public, one per file, in the namespace `Forge.Next.Formatters`.
 
 | File | Kind | Role |
 | --- | --- | --- |
 | `IDataFormatter.cs` | interface | The contract: `ReadAsync(input)` → `T?`, `ReadAsync(input, output)`, `WriteAsync(data, output)`, each a `Task<ErrorOr<…>>` with an optional `CancellationToken` |
-| `ICryptoFormatter.cs` | interface | `IDataFormatter<T>` plus `BufferSize`, `Certificate`, `IV`, `Key` |
+| `ICryptoFormatter.cs` | interface | `IDataFormatter<T>` plus `BufferSize`, `Certificate`, `IV`, `Key`, and since 3.4.0 `OutputFormat` and `AcceptUnauthenticated` |
+| `AesOutputFormat.cs` | enum (since 3.4.0) | `Legacy` (0, the default) and `Authenticated` (1): the format the AES formatters write |
 | `IGZipByteArrayFormatter.cs`, `IGZipStreamFormatter.cs`, `IBrotliByteArrayFormatter.cs`, `IBrotliStreamFormatter.cs` | interface | `IDataFormatter<byte[]>` or `IDataFormatter<Stream>` plus `BufferSize`; the Brotli ones exist on `net48` too |
 | `IAesByteArrayFormatter.cs`, `IAesStreamFormatter.cs` | interface | `ICryptoFormatter<byte[]>` or `ICryptoFormatter<Stream>`, nothing added |
 | `IXmlDataFormatter.cs`, `IXmlSoapFormatter.cs`, `ISystemJsonFormatter.cs` | interface | `IDataFormatter<T>` plus `Encoding`; nothing; `SerializerOptions` |
 | `Consts.cs` | static class | `DefaultBufferSize` (8192), `LengthOfIV` (16), `LengthOfKey` (32) |
 | `GZipByteArrayFormatter.cs`, `GZipStreamFormatter.cs` | class | GZip through `GZipStream`, in `BufferSize` chunks; the byte-array write passes the whole array in one call |
 | `BrotliByteArrayFormatter.cs`, `BrotliStreamFormatter.cs` | class, .NET targets only | Brotli through `BrotliStream`, in `BufferSize` chunks |
-| `CryptoFormatterBase.cs` | abstract class | The IV, the key, the certificate and the buffer size, with their checks; three protected constructors |
+| `CryptoFormatterBase.cs` | abstract class | The IV, the key, the certificate, the buffer size, the output format and `AcceptUnauthenticated`, with their checks; three protected constructors; the authenticated format's writing and the format detection of a read, as `private protected` helpers |
 | `AesByteArrayFormatter.cs`, `AesStreamFormatter.cs` | class | AES through `Aes.Create()` and a `CryptoStream`, in `BufferSize` chunks |
 | `XmlDataFormatter.cs` | class | A new `XmlSerializer` per call, through a `StreamReader` or `StreamWriter` with `Encoding` (UTF-8 by default) |
 | `XmlSoapFormatter.cs` | class | The `SoapFormatter` of the SoapFormatter package: its own, or one passed to the constructor |
@@ -76,8 +77,12 @@ overloads catch everything but the caller's cancellation.
   `leaveOpen: true`. The AES formatters never dispose their `CryptoStream`, and finish a write with
   `FlushFinalBlockAsync` (`FlushFinalBlock` on `net48`).
 - **The returned streams** (`ReadAsync(input)` of the stream formatters) are new `MemoryStream`s that the caller owns:
-  `GZipStreamFormatter`'s at position 0, `BrotliStreamFormatter`'s and `AesStreamFormatter`'s at the end. On a failure
-  the Brotli and AES ones are emptied and disposed before the exception becomes an error.
+  `GZipStreamFormatter`'s at position 0, `BrotliStreamFormatter`'s and `AesStreamFormatter`'s at the end (in both AES
+  formats). On a failure the Brotli and AES ones are emptied and disposed before the exception becomes an error.
+- **The AES read looks at the input first** (since 3.4.0): a seekable input is read 4 bytes ahead and set back to
+  where it started; an input that cannot seek is copied into memory first (in both formats, so a large
+  non-seekable `Legacy` input now costs memory on the two-stream read). A `Legacy` input from a seekable stream is
+  still decrypted while it streams; an `Authenticated` one is read whole, checked, then decrypted.
 - **The extensions:** `WriteAsync` with `compress` serializes into a `MemoryStream`, then GZips it into the target.
   `ReadAsync` with `decompress` decompresses the whole input into a `MemoryStream`, hands it to the formatter and
   disposes it. A file is opened with `FileShare.Read`: `FileMode.Open` to read, `FileMode.Create` (overwrite) to write.
@@ -103,11 +108,29 @@ overloads catch everything but the caller's cancellation.
   certificate constructors, carry `[Obsolete]` as a warning, with the same message; the library itself uses them only
   from inside these obsolete members, so it builds without warnings, and the tests suppress CS0618 around their
   deliberate uses. `Certificate_Members_AreObsoleteAsWarning_Test` pins the attributes.
-- Every call creates an `Aes` with these values. The code sets no mode or padding, so `Aes`'s defaults apply (CBC,
-  PKCS7). The output has no header and no authentication tag, and one formatter uses one IV for every message.
+- **The `Legacy` format** (the default): every call creates an `Aes` with these values. The code sets no mode or
+  padding, so `Aes`'s defaults apply (CBC, PKCS7). The output has no header and no authentication tag, and one
+  formatter uses one IV for every message.
+- **The `Authenticated` format** (since 3.4.0, B1, opt-in through `OutputFormat`): the header `46 4E 46 02` (`FNF`
+  and the version 2), a random 16-byte IV per message from `RandomNumberGenerator`, the AES-256-CBC-PKCS7 ciphertext,
+  and an HMAC-SHA256 tag over the header, the IV and the ciphertext. The encryption key and the authentication key
+  are HMAC-SHA256 of `Key` over the ASCII labels `Forge.Next.Formatters.Aes.Encryption` and
+  `Forge.Next.Formatters.Aes.Authentication`; both are cleared after use. `IV` is not used. The write builds the
+  ciphertext in a `MemoryStream`, then writes header, IV, ciphertext and tag. The read checks the length (at least
+  one ciphertext block, whole blocks), the tag in constant time (an explicit loop with `NoInlining` and
+  `NoOptimization`, the same on every target), then decrypts in memory, so nothing reaches the output before the
+  tag matched.
+- **Reading decides by the header**, whatever `OutputFormat` is. No header: `Legacy`, refused unless
+  `AcceptUnauthenticated` (a `CryptographicException`, so an `Unexpected` error). The header with a wrong tag or a
+  bad length: refused unless `AcceptUnauthenticated`; if accepted, decrypted as `Legacy` in memory, because a
+  `Legacy` message starts with the header by chance once in 2^32. A flipped header bit makes a message look like
+  `Legacy` input; while that is accepted, its streaming decryption may write some output before it fails.
+- **The input must be readable**: the read checks `CanRead` first, as the `CryptoStream` constructor did.
 - **Pinned by tests** (2026-11-15, A5): with the key, IV and plaintext of NIST SP 800-38A F.2.5 both AES formatters
   write NIST's ciphertext and the PKCS7 block, byte for byte, and read it back; a fixed test certificate pins the
-  derivation and its output. They pass on every target, so `net48` and the .NET targets write the same bytes.
+  derivation and its output. They pass on every target, so `net48` and the .NET targets write the same bytes. The
+  `Authenticated` format is pinned by a known-answer message made independently (B1): both formatters read it back
+  on every target.
 
 ## The DI registrations
 

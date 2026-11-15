@@ -47,8 +47,8 @@ Re-checked against the code on 2026-11-15. The baseline after B5: 0 warnings on 
   - A6 comes before A5, A1 and A2, so their tests also run the `net48` code paths, and the A5 outputs prove that
     `net48` and the .NET targets give the same bytes.
   - A7 comes last: it describes the code after A1 to A6.
-- **Release B** (recommended, not decided yet): **B6 → B3 → B2 → B1 → B4** (B5 is done). Done: B6, B3 and B2 (a), in
-  3.4.0 (2026-11-15), which Zoltán publishes when everything is done. Next: B1. B6 decides the versions of the others; B3 is small and shared with Forge.Next.Formatters.Newtonsoft; B2 (a) is small and comes before the large B1,
+- **Release B** (recommended, not decided yet): **B6 → B3 → B2 → B1 → B4** (B5 is done). Done: B6, B3, B2 (a) and B1,
+  in 3.4.0 (2026-11-15), which Zoltán publishes when everything is done. Next: B4. B6 decides the versions of the others; B3 is small and shared with Forge.Next.Formatters.Newtonsoft; B2 (a) is small and comes before the large B1,
   which builds on the A5 tests.
 
 ## Release A
@@ -177,7 +177,17 @@ Correct the README to the code as it is (the list in `AI/OPEN.md`):
 
 ## Release B
 
-### B1. An authenticated AES output with an IV per message [ ] (Decision)
+### B1. An authenticated AES output with an IV per message [x] 2026-11-15
+
+Done as decided, in 3.4.0 (`AI/HISTORY.md`). Left for later: the default switch (a major version) and a chunked
+format.
+
+**Decided by Zoltán on 2026-11-15:** the format below as proposed, with one refinement: when a header is present but
+the tag does not match, and the current format is accepted (`AcceptUnauthenticated`), the input is read the current
+way, because a message of the current format starts with the header bytes by chance once in 2^32. Writing: (b),
+opt-in, so it goes into 3.4.0. The API: a public enum `AesOutputFormat` (`Legacy = 0`, `Authenticated = 1`) and, on
+`ICryptoFormatter<T>` and `CryptoFormatterBase<T>`, `OutputFormat` (default `Legacy`, what `WriteAsync` writes) and
+`AcceptUnauthenticated` (default `true`); `ReadAsync` recognizes the format by its header whatever `OutputFormat` is.
 
 - **Problem:** the output is AES-CBC with no header and no authentication tag, and one formatter encrypts every message
   with the same IV, so equal plaintext beginnings give equal ciphertext beginnings, and a changed ciphertext decrypts to

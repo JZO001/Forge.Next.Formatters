@@ -52,36 +52,52 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
 
         return this.ProtectAsync<AesStreamFormatter, Stream?>(async (_, _) =>
         {
-            using Aes r = Aes.Create();
-            r.IV = IV;
-            r.Key = Key;
-
-            using ICryptoTransform decryptor = r.CreateDecryptor();
-            CryptoStream csDecrypt = new CryptoStream(inputStream, decryptor, CryptoStreamMode.Read);
-
-            byte[] buffer = new byte[BufferSize];
-            int numRead = 0;
-            MemoryStream ms = new MemoryStream();
+            (byte[]? plaintext, Stream? legacy) = await OpenAsync(inputStream, cancellationToken).ConfigureAwait(false);
+            if (plaintext is not null)
+            {
+                // Positioned at its end, as the stream of the Legacy format is.
+                MemoryStream result = new MemoryStream(plaintext.Length);
+                result.Write(plaintext, 0, plaintext.Length);
+                return result;
+            }
 
             try
             {
-                while ((numRead = await csDecrypt.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
-                {
-                    await ms.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
-                }
-            }
-            catch
-            {
-                ms.SetLength(0);
-#if NETCOREAPP
-                await ms.DisposeAsync().ConfigureAwait(false);
-#else
-                ms.Dispose();
-#endif
-                throw;
-            }
+                using Aes r = Aes.Create();
+                r.IV = IV;
+                r.Key = Key;
 
-            return ms;
+                using ICryptoTransform decryptor = r.CreateDecryptor();
+                CryptoStream csDecrypt = new CryptoStream(legacy!, decryptor, CryptoStreamMode.Read);
+
+                byte[] buffer = new byte[BufferSize];
+                int numRead = 0;
+                MemoryStream ms = new MemoryStream();
+
+                try
+                {
+                    while ((numRead = await csDecrypt.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
+                    {
+                        await ms.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+                catch
+                {
+                    ms.SetLength(0);
+#if NETCOREAPP
+                    await ms.DisposeAsync().ConfigureAwait(false);
+#else
+                    ms.Dispose();
+#endif
+                    throw;
+                }
+
+                return ms;
+            }
+            finally
+            {
+                if (!ReferenceEquals(legacy, inputStream)) legacy!.Dispose();
+            }
         }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
@@ -101,22 +117,36 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
 
         return this.ProtectAsync<AesStreamFormatter, Success>(async (_, _) =>
         {
-            using Aes r = Aes.Create();
-            r.IV = IV;
-            r.Key = Key;
-
-            using ICryptoTransform decryptor = r.CreateDecryptor();
-            CryptoStream csDecrypt = new CryptoStream(inputStream, decryptor, CryptoStreamMode.Read);
-
-            byte[] buffer = new byte[BufferSize];
-            int numRead = 0;
-
-            while ((numRead = await csDecrypt.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
+            (byte[]? plaintext, Stream? legacy) = await OpenAsync(inputStream, cancellationToken).ConfigureAwait(false);
+            if (plaintext is not null)
             {
-                await outputStream.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
+                await outputStream.WriteAsync(plaintext, 0, plaintext.Length, cancellationToken).ConfigureAwait(false);
+                return Result.Success;
             }
 
-            return Result.Success;
+            try
+            {
+                using Aes r = Aes.Create();
+                r.IV = IV;
+                r.Key = Key;
+
+                using ICryptoTransform decryptor = r.CreateDecryptor();
+                CryptoStream csDecrypt = new CryptoStream(legacy!, decryptor, CryptoStreamMode.Read);
+
+                byte[] buffer = new byte[BufferSize];
+                int numRead = 0;
+
+                while ((numRead = await csDecrypt.ReadAsync(buffer, 0, buffer.Length, cancellationToken).ConfigureAwait(false)) != 0)
+                {
+                    await outputStream.WriteAsync(buffer, 0, numRead, cancellationToken).ConfigureAwait(false);
+                }
+
+                return Result.Success;
+            }
+            finally
+            {
+                if (!ReferenceEquals(legacy, inputStream)) legacy!.Dispose();
+            }
         }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
@@ -136,6 +166,12 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
 
         return this.ProtectAsync<AesStreamFormatter, Success>(async (_, _) =>
         {
+            if (OutputFormat == AesOutputFormat.Authenticated)
+            {
+                await WriteAuthenticatedAsync(data, outputStream, cancellationToken).ConfigureAwait(false);
+                return Result.Success;
+            }
+
             using Aes r = Aes.Create();
             r.IV = IV;
             r.Key = Key;

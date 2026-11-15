@@ -408,4 +408,189 @@ public class AesByteArrayFormatterTests
         Assert.False(result.IsError);
         Assert.Equal(CryptoFormatterBaseTests.NistPlaintext, result.Value);
     }
+
+    // ------------------------------------------------------------------
+    // The authenticated format (AesOutputFormat.Authenticated, since 3.4.0)
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// Pins the authenticated format: the known-answer message, made independently of the formatters, reads back to
+    /// the plaintext, with the formatter's default settings (the format is recognized by its header).
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_AuthenticatedKnownAnswer_ReturnsPlaintext_Test()
+    {
+        // Arrange: the IV property is not used by this format; a different one proves it.
+        AesByteArrayFormatter formatter = new AesByteArrayFormatter(Iv, CryptoFormatterBaseTests.NistKey);
+        using MemoryStream input = new MemoryStream(CryptoFormatterBaseTests.AuthenticatedMessage);
+
+        // Act
+        ErrorOr<byte[]?> result = await formatter.ReadAsync(input);
+
+        // Assert
+        Assert.False(result.IsError);
+        Assert.Equal(CryptoFormatterBaseTests.NistPlaintext, result.Value);
+    }
+
+    /// <summary>
+    /// With <see cref="AesOutputFormat.Authenticated"/> the formatter writes the header, a 16-byte IV, the ciphertext
+    /// and a 32-byte tag, and a reader with the same key, but another IV and the default settings, reads it back.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_Authenticated_WritesTheFormatAndRoundTrips_Test()
+    {
+        // Arrange
+        AesByteArrayFormatter writer = new AesByteArrayFormatter(Iv, Key) { OutputFormat = AesOutputFormat.Authenticated };
+        AesByteArrayFormatter reader = new AesByteArrayFormatter(new byte[16], Key);
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> write = await writer.WriteAsync(CryptoFormatterBaseTests.NistPlaintext, output);
+        byte[] message = output.ToArray();
+        ErrorOr<byte[]?> read = await reader.ReadAsync(new MemoryStream(message));
+
+        // Assert: 4 + 16 + 80 (64 bytes and a full PKCS7 block) + 32 bytes, starting with the header.
+        Assert.False(write.IsError);
+        Assert.Equal(132, message.Length);
+        Assert.Equal(new byte[] { 0x46, 0x4E, 0x46, 0x02 }, message.Take(4).ToArray());
+        Assert.False(read.IsError);
+        Assert.Equal(CryptoFormatterBaseTests.NistPlaintext, read.Value);
+    }
+
+    /// <summary>
+    /// Every authenticated message gets a new random IV, so the same plaintext gives different messages.
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_AuthenticatedTwice_UsesANewIvEachTime_Test()
+    {
+        // Arrange
+        AesByteArrayFormatter formatter = new AesByteArrayFormatter(Iv, Key) { OutputFormat = AesOutputFormat.Authenticated };
+        using MemoryStream first = new MemoryStream();
+        using MemoryStream second = new MemoryStream();
+
+        // Act
+        Assert.False((await formatter.WriteAsync(CryptoFormatterBaseTests.NistPlaintext, first)).IsError);
+        Assert.False((await formatter.WriteAsync(CryptoFormatterBaseTests.NistPlaintext, second)).IsError);
+
+        // Assert: the IVs (bytes 4 to 19) differ, and so do the messages.
+        Assert.NotEqual(first.ToArray().Skip(4).Take(16).ToArray(), second.ToArray().Skip(4).Take(16).ToArray());
+        Assert.NotEqual(first.ToArray(), second.ToArray());
+    }
+
+    /// <summary>
+    /// One flipped bit anywhere in an authenticated message gives an error. When the unauthenticated format is refused,
+    /// nothing reaches the output; when it is accepted, nothing does either, unless the flip is in the header, which
+    /// makes the input look like the unauthenticated format.
+    /// </summary>
+    /// <param name="position">The byte whose lowest bit is flipped: the header, the IV, the ciphertext or the tag.</param>
+    /// <param name="acceptUnauthenticated">The value of <see cref="CryptoFormatterBase{T}.AcceptUnauthenticated"/>.</param>
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(4, false)]
+    [InlineData(20, false)]
+    [InlineData(99, false)]
+    [InlineData(131, false)]
+    [InlineData(0, true)]
+    [InlineData(4, true)]
+    [InlineData(20, true)]
+    [InlineData(99, true)]
+    [InlineData(131, true)]
+    public async Task ReadAsyncWithOutput_AuthenticatedFlippedBit_ReturnsError_Test(int position, bool acceptUnauthenticated)
+    {
+        // Arrange
+        AesByteArrayFormatter formatter = new AesByteArrayFormatter(Iv, CryptoFormatterBaseTests.NistKey) { AcceptUnauthenticated = acceptUnauthenticated };
+        byte[] message = (byte[])CryptoFormatterBaseTests.AuthenticatedMessage.Clone();
+        message[position] ^= 0x01;
+        using MemoryStream output = new MemoryStream();
+
+        // Act
+        ErrorOr<Success> result = await formatter.ReadAsync(new MemoryStream(message), output);
+
+        // Assert
+        Assert.True(result.IsError);
+        if (!acceptUnauthenticated || position >= 4) Assert.Equal(0, output.Length);
+    }
+
+    /// <summary>
+    /// A cut-off authenticated message gives an error, whether or not the unauthenticated format is accepted.
+    /// </summary>
+    /// <param name="cut">The number of bytes cut off the end.</param>
+    /// <param name="acceptUnauthenticated">The value of <see cref="CryptoFormatterBase{T}.AcceptUnauthenticated"/>.</param>
+    [Theory]
+    [InlineData(1, false)]
+    [InlineData(1, true)]
+    [InlineData(4, false)]
+    [InlineData(32, false)]
+    [InlineData(32, true)]
+    public async Task ReadAsync_AuthenticatedCutOff_ReturnsError_Test(int cut, bool acceptUnauthenticated)
+    {
+        // Arrange
+        AesByteArrayFormatter formatter = new AesByteArrayFormatter(Iv, CryptoFormatterBaseTests.NistKey) { AcceptUnauthenticated = acceptUnauthenticated };
+        byte[] message = CryptoFormatterBaseTests.AuthenticatedMessage.Take(CryptoFormatterBaseTests.AuthenticatedMessage.Length - cut).ToArray();
+
+        // Act
+        ErrorOr<byte[]?> result = await formatter.ReadAsync(new MemoryStream(message));
+
+        // Assert
+        Assert.True(result.IsError);
+    }
+
+    /// <summary>
+    /// With <see cref="CryptoFormatterBase{T}.AcceptUnauthenticated"/> set to <c>false</c>, input of the
+    /// <see cref="AesOutputFormat.Legacy"/> format is refused with an error.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_LegacyInputNotAccepted_ReturnsError_Test()
+    {
+        // Arrange
+        AesByteArrayFormatter formatter = new AesByteArrayFormatter(CryptoFormatterBaseTests.NistIv, CryptoFormatterBaseTests.NistKey) { AcceptUnauthenticated = false };
+
+        // Act
+        ErrorOr<byte[]?> result = await formatter.ReadAsync(new MemoryStream(CryptoFormatterBaseTests.NistCiphertextWithPkcs7));
+
+        // Assert
+        Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
+    }
+
+    /// <summary>
+    /// A message of the <see cref="AesOutputFormat.Legacy"/> format whose first bytes equal the header (by chance once
+    /// in 2^32; made here on purpose by choosing the first ciphertext block) is still read the legacy way when that
+    /// format is accepted, and refused when it is not.
+    /// </summary>
+    /// <param name="acceptUnauthenticated">The value of <see cref="CryptoFormatterBase{T}.AcceptUnauthenticated"/>.</param>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ReadAsync_LegacyInputStartingWithTheHeader_IsReadTheLegacyWayWhenAccepted_Test(bool acceptUnauthenticated)
+    {
+        // Arrange: the plaintext block whose ciphertext is "FNF" 0x02 and 12 zero bytes: P = AES-Decrypt(C) XOR IV.
+        byte[] chosenBlock = new byte[16];
+        chosenBlock[0] = 0x46; chosenBlock[1] = 0x4E; chosenBlock[2] = 0x46; chosenBlock[3] = 0x02;
+        byte[] plaintext;
+        using (Aes aes = Aes.Create())
+        {
+            aes.Key = CryptoFormatterBaseTests.NistKey;
+            aes.Mode = CipherMode.ECB;
+            aes.Padding = PaddingMode.None;
+            using ICryptoTransform decryptor = aes.CreateDecryptor();
+            plaintext = decryptor.TransformFinalBlock(chosenBlock, 0, 16);
+        }
+
+        for (int i = 0; i < 16; i++) plaintext[i] ^= CryptoFormatterBaseTests.NistIv[i];
+
+        AesByteArrayFormatter writer = new AesByteArrayFormatter(CryptoFormatterBaseTests.NistIv, CryptoFormatterBaseTests.NistKey);
+        using MemoryStream legacy = new MemoryStream();
+        Assert.False((await writer.WriteAsync(plaintext, legacy)).IsError);
+        Assert.Equal(chosenBlock, legacy.ToArray().Take(16).ToArray());
+
+        AesByteArrayFormatter reader = new AesByteArrayFormatter(CryptoFormatterBaseTests.NistIv, CryptoFormatterBaseTests.NistKey) { AcceptUnauthenticated = acceptUnauthenticated };
+
+        // Act
+        ErrorOr<byte[]?> result = await reader.ReadAsync(new MemoryStream(legacy.ToArray()));
+
+        // Assert
+        Assert.Equal(!acceptUnauthenticated, result.IsError);
+        if (acceptUnauthenticated) Assert.Equal(plaintext, result.Value);
+    }
 }

@@ -35,6 +35,7 @@ an [`ErrorOr<T>`](https://github.com/amantinband/error-or) result instead.
   - [`XmlSoapFormatter<T>`](#xmlsoapformattert)
   - [`SystemJsonFormatter<T>`](#systemjsonformattert)
   - [`CryptoFormatterBase<T>`](#cryptoformatterbaset)
+  - [The AES output formats](#the-aes-output-formats)
   - [`AesByteArrayFormatter`](#aesbytearrayformatter)
   - [`AesStreamFormatter`](#aesstreamformatter)
   - [`DataFormatterExtensions`](#dataformatterextensions)
@@ -143,6 +144,8 @@ public interface ICryptoFormatter<T> : IDataFormatter<T>
     X509Certificate2? Certificate { get; set; } // derives IV + Key when set; obsolete since 3.4.0
     byte[] IV { get; set; }                    // 16-byte initialization vector
     byte[] Key { get; set; }                   // 32-byte (AES-256) key
+    AesOutputFormat OutputFormat { get; set; } // what WriteAsync writes (since 3.4.0; default Legacy)
+    bool AcceptUnauthenticated { get; set; }   // whether ReadAsync accepts Legacy input (since 3.4.0; default true)
 }
 ```
 
@@ -268,7 +271,7 @@ Every concrete formatter is registered and injected through an interface. The fu
 | Interface | Extends | Adds | Implemented by |
 |-----------|---------|------|----------------|
 | `IDataFormatter<T>` | — | `ReadAsync` (×2), `WriteAsync` | *(all formatters)* |
-| `ICryptoFormatter<T>` | `IDataFormatter<T>` | `BufferSize`, `Certificate`, `IV`, `Key` | `CryptoFormatterBase<T>` |
+| `ICryptoFormatter<T>` | `IDataFormatter<T>` | `BufferSize`, `Certificate`, `IV`, `Key`, `OutputFormat`, `AcceptUnauthenticated` | `CryptoFormatterBase<T>` |
 | `IGZipByteArrayFormatter` | `IDataFormatter<byte[]>` | `BufferSize` | `GZipByteArrayFormatter` |
 | `IGZipStreamFormatter` | `IDataFormatter<Stream>` | `BufferSize` | `GZipStreamFormatter` |
 | `IBrotliByteArrayFormatter` | `IDataFormatter<byte[]>` | `BufferSize` | `BrotliByteArrayFormatter` |
@@ -672,6 +675,11 @@ everything below.
   for `null` and `InvalidDataException` when the length is not exactly `Consts.LengthOfIV` (16).
 - `byte[] Key { get; set; }` — 32-byte key. The setter throws `ArgumentNullException` for `null` and
   `InvalidDataException` when the length is not exactly `Consts.LengthOfKey` (32).
+- `AesOutputFormat OutputFormat { get; set; }` — the format `WriteAsync` writes (since 3.4.0; default
+  `AesOutputFormat.Legacy`). The setter throws `ArgumentOutOfRangeException` for an undefined value.
+  See [The AES output formats](#the-aes-output-formats).
+- `bool AcceptUnauthenticated { get; set; }` — whether `ReadAsync` accepts the unauthenticated
+  `Legacy` format (since 3.4.0; default `true`).
 
 **Abstract members** (implemented by the concrete AES formatters)
 
@@ -703,6 +711,44 @@ catch (InvalidDataException)
 
 ---
 
+### The AES output formats
+
+Since 3.4.0 the AES formatters can write two formats, chosen with `OutputFormat` (the enum
+`AesOutputFormat`). **Reading recognizes both by their header**, whatever `OutputFormat` is.
+
+| Format | What `WriteAsync` writes | Protection |
+|--------|--------------------------|------------|
+| `AesOutputFormat.Legacy` (the default) | The bare AES-256-CBC ciphertext with PKCS7 padding, encrypted with the formatter's `IV` and `Key`: the format of every earlier version. | Confidentiality only. A changed ciphertext is not detected, and one formatter uses one IV for every message. |
+| `AesOutputFormat.Authenticated` | The 4-byte header `FNF` `0x02`, a random 16-byte IV per message, the AES-256-CBC ciphertext with PKCS7 padding, and a 32-byte HMAC-SHA256 tag over all of them (encrypt-then-MAC). The encryption and the authentication key are derived from `Key` (HMAC-SHA256 over two fixed labels); `IV` is not used. | Confidentiality and integrity: the tag is checked, in constant time, before anything is decrypted, so a changed or cut-off message gives an error and **nothing reaches the output**. |
+
+`AcceptUnauthenticated` (default `true`) decides whether reading accepts the `Legacy` format. Set it
+to `false` once all your data is authenticated: input without a valid tag then gives an
+`Unexpected` error. While it is `true`, a message with the header but a wrong tag is also tried as
+`Legacy` input, because a `Legacy` message starts with the header bytes by chance once in 2^32.
+
+**Moving to the authenticated format:**
+
+1. Update every reader to 3.4.0 or later: it reads both formats.
+2. Set `OutputFormat = AesOutputFormat.Authenticated` on the writers. The formatters built by the
+   `AddForgeFormatters…` methods start with `Legacy`; set it on the resolved instance, or register
+   your own.
+3. Once the old data has been read and written again, set `AcceptUnauthenticated = false`.
+
+```csharp
+var formatter = new AesByteArrayFormatter(iv, key)
+{
+    OutputFormat = AesOutputFormat.Authenticated, // write the authenticated format
+    AcceptUnauthenticated = false,               // and refuse anything else
+};
+```
+
+**Memory:** the authenticated format is built and checked as a whole, so writing and reading keep the
+whole message in memory, also with `AesStreamFormatter`. Reading also copies an input stream that
+cannot seek into memory first, in both formats, so it can look at the header and read it again; a
+seekable input is read from its current position and goes back there after the header is checked.
+
+---
+
 ### `AesByteArrayFormatter`
 
 Encrypts / decrypts a `byte[]` with AES-256. Inherits everything from
@@ -722,9 +768,10 @@ Encrypts / decrypts a `byte[]` with AES-256. Inherits everything from
 - `Task<ErrorOr<Success>> WriteAsync(byte[] data, Stream outputStream, CancellationToken)` — encrypt `data` into `outputStream`.
 - Plus the inherited `IV`, `Key`, `Certificate`, `BufferSize` members.
 
-> To decrypt data you must use the **same IV and key** that were used to encrypt it. The output is
-> AES-256-CBC with PKCS7 padding and nothing else: no header, no IV, no authentication tag (see
-> [Security notes](#security-notes)).
+> To decrypt data you must use the **same key** that was used to encrypt it, and in the default
+> `Legacy` format the same IV too: that output is AES-256-CBC with PKCS7 padding and nothing else, no
+> header, no IV, no authentication tag. See [The AES output formats](#the-aes-output-formats) for the
+> authenticated format, and [Security notes](#security-notes).
 
 **Example**
 
@@ -1149,13 +1196,15 @@ Handy `ErrorOr<T>` members:
 
 ## Security notes
 
-- **The AES output is not authenticated.** It is AES-256-CBC with PKCS7 padding, with no header and
-  no authentication tag. A modified ciphertext decrypts to modified data, or fails on the padding,
-  without the change being detected as such. If integrity matters, authenticate the ciphertext
-  yourself, for example with an HMAC-SHA256 over it under a separate key, checked before you decrypt.
-- **One formatter uses one IV for every message.** The IV is a property of the formatter, not of the
-  message, so two messages that begin with the same bytes give ciphertexts that begin with the same
-  bytes. Where that matters, use a new random IV per message and store it next to the ciphertext.
+- **The default AES output is not authenticated.** The `Legacy` format, still the default, is
+  AES-256-CBC with PKCS7 padding, with no header and no authentication tag: a modified ciphertext
+  decrypts to modified data, or fails on the padding, without the change being detected as such.
+  Since 3.4.0, write `AesOutputFormat.Authenticated` and set `AcceptUnauthenticated = false` (see
+  [The AES output formats](#the-aes-output-formats)); as long as `Legacy` input is accepted, an
+  attacker can still hand you `Legacy` input.
+- **In the `Legacy` format one formatter uses one IV for every message.** The IV is a property of the
+  formatter, not of the message, so two messages that begin with the same bytes give ciphertexts that
+  begin with the same bytes. The `Authenticated` format uses a new random IV per message.
 - **Keys derived from a certificate are not secret.** The IV and key come from the certificate's
   public key, so anyone who has the certificate can decrypt (see
   [Deriving keys from a certificate](#deriving-keys-from-a-certificate)); the certificate members are

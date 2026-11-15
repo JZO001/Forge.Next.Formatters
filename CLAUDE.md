@@ -80,23 +80,28 @@ formatter, and dependency-injection registrations. Read in this order:
      change.
    - The two-stream `ReadAsync` of the XML, SOAP and JSON formatters returns `Forbidden`, "Method not implemented.".
    - Besides the caller's own cancellation, only constructors and property setters throw: `ArgumentNullException` for a
-     null certificate, IV, key or `SoapFormatter`, and `InvalidDataException` for an IV that is not 16 bytes or a key
-     that is not 32. The stream
-     overloads of `DataFormatterExtensions` let an exception of an application's own formatter pass (`AI/DESIGN.md`).
+     null certificate, IV, key or `SoapFormatter`, `InvalidDataException` for an IV that is not 16 bytes or a key that
+     is not 32, and `ArgumentOutOfRangeException` for an undefined `OutputFormat`. The stream overloads of
+     `DataFormatterExtensions` let an exception of an application's own formatter pass (`AI/DESIGN.md`).
 5. **The caller's streams stay open.** The compression streams and the XML reader and writer are created with
    `leaveOpen: true`, and the AES `CryptoStream` is never disposed. Callers rewind and reuse a stream after
-   `WriteAsync`; the README's examples and the tests do.
+   `WriteAsync`; the README's examples and the tests do. Since 3.4.0 the AES read looks at the first 4 bytes of a
+   seekable input and goes back to where it started; an input that cannot seek is copied into memory first.
 6. **The returned streams.** `GZipStreamFormatter.ReadAsync(stream)` returns a new `MemoryStream` at position 0 (since
    3.2.5; `DataFormatterExtensions.ReadAsync` depends on it). `BrotliStreamFormatter` and `AesStreamFormatter` return
    theirs at the end. The caller owns the returned stream.
-7. **Data written earlier stays readable.** The AES output is the bare ciphertext of `Aes.Create()` with its default
-   mode and padding (the code sets neither), without a header. A certificate gives the IV from the first 16 and the key
-   from the last 32 bytes of `PublicKey.EncodedKeyValue.RawData`; its members are `[Obsolete]` (a warning) since 3.4.0
-   (B2), but work as before, so data written with them stays readable. The `compress` layer of the extensions is plain
-   GZip.
+7. **Data written earlier stays readable.** The `Legacy` AES output (the default) is the bare ciphertext of
+   `Aes.Create()` with its default mode and padding (the code sets neither), without a header. The `Authenticated`
+   output (since 3.4.0, B1) is the header `FNF` `0x02`, a random IV, the AES-256-CBC-PKCS7 ciphertext under a key
+   derived from `Key`, and an HMAC-SHA256 tag over all of them under a second derived key; the two keys are HMAC-SHA256
+   of `Key` over the labels `Forge.Next.Formatters.Aes.Encryption` and `Forge.Next.Formatters.Aes.Authentication`.
+   Reading recognizes both by the header. A certificate gives the IV from the first 16 and the key from the last 32
+   bytes of `PublicKey.EncodedKeyValue.RawData`; its members are `[Obsolete]` (a warning) since 3.4.0 (B2), but work as
+   before, so data written with them stays readable. The `compress` layer of the extensions is plain GZip.
    Changing any of these makes stored data unreadable: treat it as a breaking change. The known-answer tests pin
-   them on every target (`…_NistVector_…` with NIST SP 800-38A F.2.5, `…_FixedCertificate_…`): a change that makes one
-   of them fail is such a change.
+   them on every target (`…_NistVector_…` with NIST SP 800-38A F.2.5, `…_FixedCertificate_…`, and
+   `…_AuthenticatedKnownAnswer_…` with `CryptoFormatterBaseTests.AuthenticatedMessage`): a change that makes one of
+   them fail is such a change.
 
 ## Conventions
 

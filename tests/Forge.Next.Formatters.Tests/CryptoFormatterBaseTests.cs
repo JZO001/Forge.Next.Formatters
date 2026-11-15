@@ -372,6 +372,49 @@ public class CryptoFormatterBaseTests
         }
     }
 
+    /// <summary>
+    /// A new formatter writes the <see cref="AesOutputFormat.Legacy"/> format by default, so its output is what earlier
+    /// versions wrote (since 3.4.0 the format is a choice).
+    /// </summary>
+    [Fact]
+    public void OutputFormat_Default_IsLegacy_Test()
+    {
+        // Act
+        TestCryptoFormatter formatter = new TestCryptoFormatter();
+
+        // Assert
+        Assert.Equal(AesOutputFormat.Legacy, formatter.OutputFormat);
+    }
+
+    /// <summary>
+    /// A new formatter accepts the unauthenticated <see cref="AesOutputFormat.Legacy"/> format by default, so data
+    /// written by earlier versions stays readable.
+    /// </summary>
+    [Fact]
+    public void AcceptUnauthenticated_Default_IsTrue_Test()
+    {
+        // Act
+        TestCryptoFormatter formatter = new TestCryptoFormatter();
+
+        // Assert
+        Assert.True(formatter.AcceptUnauthenticated);
+    }
+
+    /// <summary>
+    /// The <see cref="CryptoFormatterBase{T}.OutputFormat"/> setter rejects a value that is not a defined
+    /// <see cref="AesOutputFormat"/>, and keeps the previous value.
+    /// </summary>
+    [Fact]
+    public void OutputFormat_SetUndefinedValue_ThrowsArgumentOutOfRangeException_Test()
+    {
+        // Arrange
+        TestCryptoFormatter formatter = new TestCryptoFormatter { OutputFormat = AesOutputFormat.Authenticated };
+
+        // Act & Assert
+        Assert.Throws<ArgumentOutOfRangeException>(() => formatter.OutputFormat = (AesOutputFormat)42);
+        Assert.Equal(AesOutputFormat.Authenticated, formatter.OutputFormat);
+    }
+
     // ------------------------------------------------------------------
     // Known-answer data, shared with the AES formatter tests
     // ------------------------------------------------------------------
@@ -412,6 +455,25 @@ public class CryptoFormatterBaseTests
         "39f23369a9d9bacfa530e26304231461" +
         "b2eb05e2c39be9fcda6c19078c6a9d1b" +
         "3f461796d6b0d6b2e0c2a72b4d80e644");
+
+    /// <summary>
+    /// A known-answer message of the <see cref="AesOutputFormat.Authenticated"/> format (132 bytes): the key and the
+    /// plaintext of <see cref="NistKey"/> and <see cref="NistPlaintext"/>, the IV <c>f0f1...ff</c>. Computed once,
+    /// independently of the formatters: the two keys as HMAC-SHA256 of the key over the labels
+    /// <c>Forge.Next.Formatters.Aes.Encryption</c> and <c>Forge.Next.Formatters.Aes.Authentication</c>, the ciphertext by
+    /// hand-made CBC from single-block AES encryptions, and the tag as HMAC-SHA256 over the header, the IV and the
+    /// ciphertext.
+    /// </summary>
+    internal static readonly byte[] AuthenticatedMessage = FromHex(
+        "464e4602f0f1f2f3f4f5f6f7f8f9fafb" +
+        "fcfdfeff8e0b4fee4e281db1041bf656" +
+        "f3db1850349610860dd54f28d8511007" +
+        "74b606ab3d4e0d8b21619748f3e76655" +
+        "b6f8ebbf870467eadf7a35e0f481bc80" +
+        "bca9f544dc5596fe6469f825d9830fe0" +
+        "c34dd70af95f4b18478755ee15cb2ba7" +
+        "816e72cef524a1a8e2a61d9f406612fc" +
+        "76d8f239");
 
     /// <summary>
     /// A fixed self-signed RSA 2048 test certificate ("CN=Forge.Next.Formatters.Tests.FixedCertificate"),
