@@ -39,8 +39,8 @@ assembly without dependencies, used on every target.
 
 **What differs on `net48`:**
 - no Brotli formatters and no Brotli registrations; the two Brotli interfaces exist;
-- `CryptoStream.FlushFinalBlock()` and `MemoryStream.Dispose()` instead of their async forms, and
-  `StreamWriter.FlushAsync()` without the token.
+- `CryptoStream.FlushFinalBlock()` and `MemoryStream.Dispose()` instead of their async forms. (The XML write's
+  `StreamWriter.FlushAsync` takes no token on any target since 3.4.0, so it no longer differs.)
 
 ## One operation
 
@@ -49,20 +49,26 @@ assembly without dependencies, used on every target.
    `WriteAsync` checks `BufferSize` without using it.
 2. **The work** runs in `ProtectAsync` from `Forge.Next.Shared`: on the formatter itself (`this.ProtectAsync(...)`) or,
    in the extensions, on `typeof(DataFormatterExtensions)`. The lambda captures the caller's token and passes it to the
-   stream calls. `ProtectAsync` gets no token and no options, so it turns every exception, a cancellation too, into
-   `Unexpected` errors (code `General.Unexpected`, description the exception's message), one per exception in the
-   inner-exception chain, with the metadata `type`, `message` and `stackTrace`.
+   stream calls. Since 3.4.0 (B3) `ProtectAsync` also gets the token and `rethrowCancellation: true`: an
+   `OperationCanceledException` thrown while the caller's token requested cancellation is rethrown; every other
+   exception, an inner cancellation included, becomes `Unexpected` errors (code `General.Unexpected`, description the
+   exception's message), one per exception in the inner-exception chain, with the metadata `type`, `message` and
+   `stackTrace` (`includeStackTrace` at its default). `ProtectAsync` does not check the token before it runs the
+   lambda; the lambdas that need that check do it themselves (step 4).
 3. **The I/O.** The compression and AES formatters copy in a loop that reads `BufferSize` bytes at a time into one
    buffer and writes them on, with `ReadAsync`, `WriteAsync` and `ConfigureAwait(false)` (the two-stream `ReadAsync` of
    `AesStreamFormatter` too, since 2026-11-15; it used the synchronous `CryptoStream.Read` before). The XML and SOAP formatters call the
    synchronous `Serialize` and `Deserialize`; the JSON formatter calls `JsonSerializer`'s async methods with the token.
-4. **The token** therefore stops the compression, AES and JSON formatters. The XML read and both SOAP methods do not
-   use it. The XML write passes it only to `StreamWriter.FlushAsync` (not on `net48`, which has no such overload), after
-   `Serialize` has filled the writer; when that throws, disposing the writer still flushes the XML into the output.
-   The tests pin each of these (2026-11-15).
+4. **The token** stops the compression, AES and JSON formatters through their async calls. The XML and SOAP formatters
+   call `ThrowIfCancellationRequested()` once, before the synchronous serializer, and the XML write flushes without the
+   token: a cancelled call does nothing, a started one completes (since 3.4.0; before, the XML read and SOAP ignored
+   the token, and the XML write threw at the flush after the whole document had gone into the writer, which disposing
+   it flushed anyway). The `FileInfo` overloads of `DataFormatterExtensions` check the token before they open the file,
+   so a cancelled write does not truncate an existing file. The tests pin each of these.
 
 The stream overloads of `DataFormatterExtensions` do not run in `ProtectAsync`: an exception from an application's own
-`IDataFormatter<T>` passes through them. The `FileInfo` overloads catch it.
+`IDataFormatter<T>` passes through them, and so does the caller's cancellation from a formatter. The `FileInfo`
+overloads catch everything but the caller's cancellation.
 
 ## The streams
 

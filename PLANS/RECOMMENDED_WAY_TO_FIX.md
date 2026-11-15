@@ -47,8 +47,8 @@ Re-checked against the code on 2026-11-15. The baseline after B5: 0 warnings on 
   - A6 comes before A5, A1 and A2, so their tests also run the `net48` code paths, and the A5 outputs prove that
     `net48` and the .NET targets give the same bytes.
   - A7 comes last: it describes the code after A1 to A6.
-- **Release B** (recommended, not decided yet): **B6 → B3 → B2 → B1 → B4** (B5 is done). B6 decides the versions of
-  the others; B3 is small and shared with Forge.Next.Formatters.Newtonsoft; B2 (a) is small and comes before the large B1,
+- **Release B** (recommended, not decided yet): **B6 → B3 → B2 → B1 → B4** (B5 is done). Done: B6 and B3, as 3.4.0
+  (2026-11-15). Next: B2. B6 decides the versions of the others; B3 is small and shared with Forge.Next.Formatters.Newtonsoft; B2 (a) is small and comes before the large B1,
   which builds on the A5 tests.
 
 ## Release A
@@ -226,7 +226,11 @@ Correct the README to the code as it is (the list in `AI/OPEN.md`):
   - (c) remove the derivation: a major version.
 - **Tests:** the A5 certificate output still reads under (a) and (b).
 
-### B3. Cancellation and the stack trace [ ] (Decision, one for this package and Forge.Next.Formatters.Newtonsoft)
+### B3. Cancellation and the stack trace [x] 2026-11-15
+
+Done with the recommendation, (a) (Zoltán): the token and `rethrowCancellation: true`, the XML/SOAP and `FileInfo`
+token checks, `includeStackTrace` unchanged; 3.4.0 (`AI/HISTORY.md`). Forge.Next.Formatters.Newtonsoft follows with its
+B1.
 
 - **Problem:** `ProtectAsync` is called without the token, `rethrowCancellation` and `includeStackTrace`. A cancellation
   therefore comes back as an `Unexpected` error instead of an `OperationCanceledException`, and every error from an

@@ -23,6 +23,7 @@ public class BrotliByteArrayFormatter : IBrotliByteArrayFormatter
     /// <param name="inputStream">The input stream containing the compressed data.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous read operation. The task result contains the decompressed byte array.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<byte[]?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<byte[]?>)Error.Validation(description: nameof(inputStream)));
@@ -42,7 +43,7 @@ public class BrotliByteArrayFormatter : IBrotliByteArrayFormatter
             }
 
             return ms.ToArray();
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -52,6 +53,7 @@ public class BrotliByteArrayFormatter : IBrotliByteArrayFormatter
     /// <param name="outputStream">The output stream to write the decompressed data to.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous read operation. The task result contains a success indicator.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(inputStream)));
@@ -71,7 +73,7 @@ public class BrotliByteArrayFormatter : IBrotliByteArrayFormatter
             }
 
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -81,6 +83,7 @@ public class BrotliByteArrayFormatter : IBrotliByteArrayFormatter
     /// <param name="outputStream">The output stream to write the compressed data to.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous write operation. The task result contains a success indicator.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Success>> WriteAsync(byte[] data, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (data is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(data)));
@@ -107,7 +110,7 @@ public class BrotliByteArrayFormatter : IBrotliByteArrayFormatter
             ms.SetLength(0);
 
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
 }

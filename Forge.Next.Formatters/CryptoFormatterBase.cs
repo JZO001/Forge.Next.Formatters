@@ -120,6 +120,7 @@ public abstract class CryptoFormatterBase<T> : ICryptoFormatter<T>
     /// <param name="inputStream">The input stream to read data from.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous read operation. The task result contains an ErrorOr&lt;T?&gt; representing the deserialized object or an error.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public abstract Task<ErrorOr<T?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -129,6 +130,7 @@ public abstract class CryptoFormatterBase<T> : ICryptoFormatter<T>
     /// <param name="outputStream">The output stream to write the decrypted data to.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous read operation. The task result contains an ErrorOr&lt;Success&gt; indicating the success or failure of the operation.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public abstract Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -138,6 +140,7 @@ public abstract class CryptoFormatterBase<T> : ICryptoFormatter<T>
     /// <param name="outputStream">The output stream to write the encrypted data to.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous write operation. The task result contains an ErrorOr&lt;Success&gt; indicating the success or failure of the operation.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public abstract Task<ErrorOr<Success>> WriteAsync(T data, Stream outputStream, CancellationToken cancellationToken = default);
 
 }

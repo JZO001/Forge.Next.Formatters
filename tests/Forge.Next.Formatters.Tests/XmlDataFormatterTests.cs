@@ -184,11 +184,12 @@ public class XmlDataFormatterTests
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// The read runs the synchronous <c>XmlSerializer.Deserialize</c> and does not use the token, so a
-    /// cancelled token does not stop it: the read succeeds. This pins the behaviour as it is.
+    /// The read checks the token once before the synchronous <c>XmlSerializer.Deserialize</c>: a cancelled
+    /// token throws <see cref="OperationCanceledException"/> and nothing is read (since 3.4.0; before, the
+    /// read ignored the token).
     /// </summary>
     [Fact]
-    public async Task ReadAsync_CancelledToken_IsIgnored_Test()
+    public async Task ReadAsync_CancelledToken_ThrowsAndReadsNothing_Test()
     {
         // Arrange: valid XML, written with a token that is not cancelled.
         XmlDataFormatter<XmlSampleData> formatter = new XmlDataFormatter<XmlSampleData>();
@@ -196,38 +197,28 @@ public class XmlDataFormatterTests
         Assert.False((await formatter.WriteAsync(new XmlSampleData { Name = "Forge", Value = 1 }, payload)).IsError);
         payload.Position = 0;
 
-        // Act
-        ErrorOr<XmlSampleData?> result = await formatter.ReadAsync(payload, new CancellationToken(canceled: true));
-
-        // Assert: the object is read as if the token were not cancelled.
-        Assert.False(result.IsError);
-        Assert.Equal("Forge", result.Value!.Name);
+        // Act & Assert: thrown, and the input is not touched.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => formatter.ReadAsync(payload, new CancellationToken(canceled: true)));
+        Assert.Equal(0, payload.Position);
     }
 
     /// <summary>
-    /// The write serializes synchronously, then flushes. On the .NET targets the flush gets the token,
-    /// so a cancelled token gives an <see cref="ErrorType.Unexpected"/> error made from the cancellation
-    /// exception; on <c>net48</c> the flush has no token overload, so the write succeeds. This pins the
-    /// behaviour as it is.
+    /// The write checks the token once before it serializes: a cancelled token throws
+    /// <see cref="OperationCanceledException"/> and writes nothing, the same on every target (since 3.4.0;
+    /// before, the .NET targets returned an error after the whole document had been written, and
+    /// <c>net48</c> ignored the token).
     /// </summary>
     [Fact]
-    public async Task WriteAsync_CancelledToken_ReturnsCancellationErrorExceptOnNet48_Test()
+    public async Task WriteAsync_CancelledToken_ThrowsAndWritesNothing_Test()
     {
         // Arrange
         XmlDataFormatter<XmlSampleData> formatter = new XmlDataFormatter<XmlSampleData>();
         using MemoryStream output = new MemoryStream();
 
-        // Act
-        ErrorOr<Success> result = await formatter.WriteAsync(new XmlSampleData { Name = "Forge", Value = 1 }, output, new CancellationToken(canceled: true));
-
-#if NETCOREAPP
-        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
-        Assert.True(result.IsError);
-        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
-        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
-#else
-        // Assert: on net48 the token is not observed.
-        Assert.False(result.IsError);
-#endif
+        // Act & Assert: thrown, and nothing is written.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => formatter.WriteAsync(new XmlSampleData { Name = "Forge", Value = 1 }, output, new CancellationToken(canceled: true)));
+        Assert.Equal(0, output.Length);
     }
 }

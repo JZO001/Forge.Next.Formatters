@@ -184,11 +184,12 @@ public class XmlSoapFormatterTests
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// The read runs the synchronous <see cref="SoapFormatter.Deserialize(Stream)"/> and does not use the
-    /// token, so a cancelled token does not stop it: the read succeeds. This pins the behaviour as it is.
+    /// The read checks the token once before the synchronous <see cref="SoapFormatter.Deserialize(Stream)"/>:
+    /// a cancelled token throws <see cref="OperationCanceledException"/> and nothing is read (since 3.4.0;
+    /// before, the read ignored the token).
     /// </summary>
     [Fact]
-    public async Task ReadAsync_CancelledToken_IsIgnored_Test()
+    public async Task ReadAsync_CancelledToken_ThrowsAndReadsNothing_Test()
     {
         // Arrange: valid SOAP, written with a token that is not cancelled.
         XmlSoapFormatter<SoapSampleData> formatter = new XmlSoapFormatter<SoapSampleData>();
@@ -196,30 +197,28 @@ public class XmlSoapFormatterTests
         Assert.False((await formatter.WriteAsync(new SoapSampleData { Name = "Forge", Value = 1 }, payload)).IsError);
         payload.Position = 0;
 
-        // Act
-        ErrorOr<SoapSampleData?> result = await formatter.ReadAsync(payload, new CancellationToken(canceled: true));
-
-        // Assert: the object is read as if the token were not cancelled.
-        Assert.False(result.IsError);
-        Assert.Equal("Forge", result.Value!.Name);
+        // Act & Assert: thrown, and the input is not touched.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => formatter.ReadAsync(payload, new CancellationToken(canceled: true)));
+        Assert.Equal(0, payload.Position);
     }
 
     /// <summary>
-    /// The write runs the synchronous <see cref="SoapFormatter.Serialize(Stream, object)"/> and does not
-    /// use the token either: a cancelled token does not stop it. This pins the behaviour as it is.
+    /// The write checks the token once before the synchronous
+    /// <see cref="SoapFormatter.Serialize(Stream, object)"/>: a cancelled token throws
+    /// <see cref="OperationCanceledException"/> and writes nothing (since 3.4.0; before, the write ignored the
+    /// token).
     /// </summary>
     [Fact]
-    public async Task WriteAsync_CancelledToken_IsIgnored_Test()
+    public async Task WriteAsync_CancelledToken_ThrowsAndWritesNothing_Test()
     {
         // Arrange
         XmlSoapFormatter<SoapSampleData> formatter = new XmlSoapFormatter<SoapSampleData>();
         using MemoryStream output = new MemoryStream();
 
-        // Act
-        ErrorOr<Success> result = await formatter.WriteAsync(new SoapSampleData { Name = "Forge", Value = 1 }, output, new CancellationToken(canceled: true));
-
-        // Assert: the object is written as if the token were not cancelled.
-        Assert.False(result.IsError);
-        Assert.True(output.Length > 0);
+        // Act & Assert: thrown, and nothing is written.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => formatter.WriteAsync(new SoapSampleData { Name = "Forge", Value = 1 }, output, new CancellationToken(canceled: true)));
+        Assert.Equal(0, output.Length);
     }
 }

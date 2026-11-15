@@ -286,3 +286,32 @@ behaviour change of Release B (B3, B4) is at least 3.4.0.
 **Decided by Zoltán:** Release A is committed as 3.3.1, but 3.3.1 will **not** be published. B3 follows on top of it,
 and the next published version is 3.4.0, carrying Release A and B3. So the README's "since 3.3.1" and "before 3.3.1"
 become 3.4.0 with B3.
+
+## 2026-11-15 – 3.4.0: the caller's cancellation throws (B3)
+
+**Decided by Zoltán:** option (a) of B3, the same decision as B1 of Forge.Next.Formatters.Newtonsoft.
+- Every `ProtectAsync` call (18 in the formatters, 2 in the `FileInfo` overloads of `DataFormatterExtensions`) gets the
+  caller's token and `rethrowCancellation: true`. `ProtectAsync` rethrows an `OperationCanceledException` only while
+  that token requested cancellation, so the caller's own cancellation throws as .NET expects, and a cancellation the
+  token did not request (an inner timeout) is still an `Unexpected` error. It does not check the token before the
+  lambda runs.
+- The XML and SOAP formatters call `ThrowIfCancellationRequested()` once, before the synchronous serializer, and the XML
+  write flushes without the token: a cancelled call does nothing, a started one completes, the same on every target.
+  This ends the case A6 found (an error after the whole XML had been written) and the `#if` around
+  `StreamWriter.FlushAsync`.
+- The `FileInfo` overloads check the token before they open the file, so a cancelled write no longer truncates an
+  existing file (found while doing B3: `FileMode.Create` ran before the formatter).
+- `includeStackTrace` stays at its default; the README's "Security notes" warn about the metadata.
+- The public methods, the interface and the base class document the `OperationCanceledException`.
+
+**Tests:** the 24 cancellation tests of A6 and the A2 test now expect `OperationCanceledException`
+(`Assert.ThrowsAnyAsync`); the XML and SOAP ones also check that nothing is read or written. New: an inner cancellation
+(a stream that throws `OperationCanceledException` itself) is still an `Unexpected` error; the `FileInfo` write keeps an
+existing file; the `FileInfo` read and the GZip-layered stream write throw. 220 test cases on the .NET targets, 187 on
+`net48`.
+
+**Version:** `AssemblyVersion` 3.4.0.0, the README 3.4.0, its "since 3.3.1" now "since 3.4.0" (3.3.1 is not published).
+
+**Compatibility:** a caller that cancels now gets an `OperationCanceledException` instead of an `Unexpected` error; the
+XML and SOAP formatters now observe the token (once, before their work). No signature changed. A minor version, by the
+rule confirmed in B6.

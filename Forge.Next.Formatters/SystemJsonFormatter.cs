@@ -22,12 +22,13 @@ public class SystemJsonFormatter<T> : ISystemJsonFormatter<T>
     /// <param name="inputStream">The input stream containing the JSON data.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous read operation. The task result contains the deserialized object of type T.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<T?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {
         return this.ProtectAsync<SystemJsonFormatter<T>, T?>(async (_, _) =>
         {
             return await JsonSerializer.DeserializeAsync<T>(inputStream, SerializerOptions, cancellationToken).ConfigureAwait(false);
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -49,6 +50,7 @@ public class SystemJsonFormatter<T> : ISystemJsonFormatter<T>
     /// <param name="outputStream">The output stream where the JSON data should be written.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous write operation. The task result contains a Success or an Error.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Success>> WriteAsync(T data, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (data is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(data)));
@@ -59,7 +61,7 @@ public class SystemJsonFormatter<T> : ISystemJsonFormatter<T>
             await JsonSerializer.SerializeAsync(outputStream, data, SerializerOptions, cancellationToken).ConfigureAwait(false);
 
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
 }

@@ -36,14 +36,18 @@ public class XmlSoapFormatter<T> : IXmlSoapFormatter<T>
     /// <param name="inputStream">The input stream containing the serialized object.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the deserialized object of type T.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<T?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<T?>)Error.Validation(description: nameof(inputStream)));
 
         return this.ProtectAsync<XmlSoapFormatter<T>, T?>(async (_, _) =>
         {
+            // Checked once here: the synchronous serializer below cannot observe the token.
+            cancellationToken.ThrowIfCancellationRequested();
+
             return (T?)_formatter.Deserialize(inputStream);
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -65,6 +69,7 @@ public class XmlSoapFormatter<T> : IXmlSoapFormatter<T>
     /// <param name="outputStream">The output stream to write the serialized object to.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result indicates whether the operation was successful.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Success>> WriteAsync(T data, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (data is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(data)));
@@ -72,9 +77,12 @@ public class XmlSoapFormatter<T> : IXmlSoapFormatter<T>
 
         return this.ProtectAsync<XmlSoapFormatter<T>, Success>(async (_, _) =>
         {
+            // Checked once here: the synchronous serializer below cannot observe the token.
+            cancellationToken.ThrowIfCancellationRequested();
+
             _formatter.Serialize(outputStream, data);
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
 }

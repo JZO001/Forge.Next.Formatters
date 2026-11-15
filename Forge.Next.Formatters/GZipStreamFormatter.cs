@@ -21,6 +21,7 @@ public class GZipStreamFormatter : IGZipStreamFormatter
     /// <param name="inputStream">The input stream containing GZip-compressed data.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the decompressed stream.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<Stream?>)Error.Validation(description: nameof(inputStream)));
@@ -44,7 +45,7 @@ public class GZipStreamFormatter : IGZipStreamFormatter
             ms.Position = 0; // the caller receives a readable stream, not one parked at the end
 
             return ms;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -54,6 +55,7 @@ public class GZipStreamFormatter : IGZipStreamFormatter
     /// <param name="outputStream">The output stream to write the decompressed data to.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains a Success value if the operation completes successfully.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(inputStream)));
@@ -74,7 +76,7 @@ public class GZipStreamFormatter : IGZipStreamFormatter
             await gzipStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -84,6 +86,7 @@ public class GZipStreamFormatter : IGZipStreamFormatter
     /// <param name="outputStream">The output stream to write the compressed data to.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains a Success value if the operation completes successfully.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Success>> WriteAsync(Stream data, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (data is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(data)));
@@ -105,7 +108,7 @@ public class GZipStreamFormatter : IGZipStreamFormatter
             await gzipStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
 }

@@ -41,6 +41,7 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
     /// <param name="inputStream">The input stream containing the encrypted data.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous operation, containing the decrypted stream or an error.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public override Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<Stream?>)Error.Validation(description: nameof(inputStream)));
@@ -78,7 +79,7 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
             }
 
             return ms;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -88,6 +89,7 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
     /// <param name="outputStream">The output stream to write the decrypted data to.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous operation, containing the result of the operation.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public override Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(inputStream)));
@@ -112,7 +114,7 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
             }
 
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -122,6 +124,7 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
     /// <param name="outputStream">The output stream to write the encrypted data to.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous operation, containing the result of the operation.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public override Task<ErrorOr<Success>> WriteAsync(Stream data, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (data is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(data)));
@@ -151,7 +154,7 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
 #endif
 
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
 }

@@ -23,6 +23,7 @@ public class BrotliStreamFormatter : IBrotliStreamFormatter
     /// <param name="inputStream">The input stream containing the compressed data.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous operation, containing the decompressed stream or an error.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<Stream?>)Error.Validation(description: nameof(inputStream)));
@@ -51,7 +52,7 @@ public class BrotliStreamFormatter : IBrotliStreamFormatter
             }
 
             return ms;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -61,6 +62,7 @@ public class BrotliStreamFormatter : IBrotliStreamFormatter
     /// <param name="outputStream">The output stream to write the decompressed data to.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous operation, containing the result of the operation.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(inputStream)));
@@ -80,7 +82,7 @@ public class BrotliStreamFormatter : IBrotliStreamFormatter
             }
 
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -90,6 +92,7 @@ public class BrotliStreamFormatter : IBrotliStreamFormatter
     /// <param name="outputStream">The output stream to write the compressed data to.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task representing the asynchronous operation, containing the result of the operation.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Success>> WriteAsync(Stream data, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (data is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(data)));
@@ -111,7 +114,7 @@ public class BrotliStreamFormatter : IBrotliStreamFormatter
             await brotliStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
 }

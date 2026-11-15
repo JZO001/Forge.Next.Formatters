@@ -21,6 +21,7 @@ public class GZipByteArrayFormatter : IGZipByteArrayFormatter
     /// <param name="inputStream">The input stream containing GZip-compressed data.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the decompressed byte array.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<byte[]?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<byte[]?>)Error.Validation(description: nameof(inputStream)));
@@ -42,7 +43,7 @@ public class GZipByteArrayFormatter : IGZipByteArrayFormatter
             await gzipStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             return ms.ToArray();
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -52,6 +53,7 @@ public class GZipByteArrayFormatter : IGZipByteArrayFormatter
     /// <param name="outputStream">The output stream to write the decompressed data to.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result indicates whether the operation was successful.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(inputStream)));
@@ -72,7 +74,7 @@ public class GZipByteArrayFormatter : IGZipByteArrayFormatter
             await gzipStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -82,6 +84,7 @@ public class GZipByteArrayFormatter : IGZipByteArrayFormatter
     /// <param name="outputStream">The output stream to write the compressed data to.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result indicates whether the operation was successful.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Success>> WriteAsync(byte[] data, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (data is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(data)));
@@ -94,7 +97,7 @@ public class GZipByteArrayFormatter : IGZipByteArrayFormatter
             await gzipStream.WriteAsync(data, 0, data.Length, cancellationToken).ConfigureAwait(false);
             await gzipStream.FlushAsync(cancellationToken).ConfigureAwait(false);
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
 }

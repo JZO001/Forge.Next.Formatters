@@ -18,6 +18,7 @@ public static class DataFormatterExtensions
     /// <param name="decompress">A flag indicating whether the data should be decompressed. Default is true.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous read operation. The task result contains the read data or an error.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public static Task<ErrorOr<T?>> ReadAsync<T>(
         this IDataFormatter<T> formatter,
         FileInfo file,
@@ -29,10 +30,13 @@ public static class DataFormatterExtensions
 
         return typeof(DataFormatterExtensions).ProtectAsync(async (_, _) =>
         {
+            // Checked before the file is opened, so a cancelled call leaves an existing file untouched.
+            cancellationToken.ThrowIfCancellationRequested();
+
             using FileStream fs = new FileStream(file.FullName, FileMode.Open, FileAccess.Read, FileShare.Read);
 
             return await ReadAsync(formatter, fs, decompress, cancellationToken).ConfigureAwait(false);
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -44,6 +48,7 @@ public static class DataFormatterExtensions
     /// <param name="decompress">A flag indicating whether the data should be decompressed. Default is true.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous read operation. The task result contains the read data or an error.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public static async Task<ErrorOr<T?>> ReadAsync<T>(
         this IDataFormatter<T> formatter,
         Stream stream,
@@ -78,6 +83,7 @@ public static class DataFormatterExtensions
     /// <param name="compress">A flag indicating whether the data should be compressed. Default is true.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous write operation. The task result contains a success indicator or an error.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public static Task<ErrorOr<Success>> WriteAsync<T>(
         this IDataFormatter<T> formatter,
         T data,
@@ -91,10 +97,13 @@ public static class DataFormatterExtensions
 
         return typeof(DataFormatterExtensions).ProtectAsync(async (_, _) =>
         {
+            // Checked before the file is opened, so a cancelled call leaves an existing file untouched.
+            cancellationToken.ThrowIfCancellationRequested();
+
             using FileStream fs = new FileStream(file.FullName, FileMode.Create, FileAccess.Write, FileShare.Read);
 
             return await WriteAsync(formatter, data, fs, compress, cancellationToken).ConfigureAwait(false);
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -107,6 +116,7 @@ public static class DataFormatterExtensions
     /// <param name="compress">A flag indicating whether the data should be compressed. Default is true.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
     /// <returns>A task that represents the asynchronous write operation. The task result contains a success indicator or an error.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public static async Task<ErrorOr<Success>> WriteAsync<T>(
         this IDataFormatter<T> formatter,
         T data,

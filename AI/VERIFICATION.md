@@ -5,7 +5,7 @@
 | Check | How | What it proves |
 | --- | --- | --- |
 | Build | `dotnet build Forge.Next.Formatters.slnx -c Debug --no-incremental` | 0 warnings for every target (`net48`, `net8.0`, `net9.0`, `net10.0`, `net11.0`), so every public member is documented (CS1591). Needs the .NET 11 SDK or later. A Debug build does not pack. |
-| Tests | `dotnet test tests/Forge.Next.Formatters.Tests` | Since 2026-11-15 on every target of the library: 216 test cases (178 test methods) on each .NET target, 183 on `net48`, which has no Brotli tests. Before, `net10.0` only. |
+| Tests | `dotnet test tests/Forge.Next.Formatters.Tests` | Since 2026-11-15 on every target of the library: 220 test cases (182 test methods) on each .NET target, 187 on `net48`, which has no Brotli tests. Before, `net10.0` only. |
 | Package contents | `dotnet build Forge.Next.Formatters/Forge.Next.Formatters.csproj -c Release -p:PackageOutputPath=<a folder outside the repository>\`, then open the `.nupkg` as a zip | `lib/<target>/` for every target, each with a complete `Forge.Next.Formatters.xml`; the README and the icon; the `.nuspec` has `<license type="expression">Apache-2.0</license>`, and its dependency groups match the table in `CLAUDE.md`. `artifacts/` stays untouched: git ignores it, so compare its files' hashes before and after. |
 
 ## What was run
@@ -37,8 +37,10 @@
 | 2026-11-15 | A2: build and tests after the fix | Windows 11, SDK 11.0.100, the installed .NET 8, 9, 10 and 11 runtimes and .NET Framework 4.8 | 0 warnings, 0 errors. 216/216 on `net8.0`, `net9.0`, `net10.0` and `net11.0`; 183/183 on `net48` |
 | 2026-11-15 | A7: the README's new and changed examples, in a scratch console program in the session's scratchpad (`net10.0`, a `ProjectReference` to the library) | Windows 11, SDK 11.0.100 | All compile. GZip's returned stream at 0, AES's at its end; a `FileInfo` write is GZip and reads back; on a stream `compress: true` and the static call give GZip, no flag and `compress: false` give plain JSON; `Validation` "data" and "BufferSize" (also on `GZipByteArrayFormatter.WriteAsync`); corrupt AES input gives `Unexpected`, code `General.Unexpected`, metadata `type`, `message`, `stackTrace`; a cancelled token gives `Unexpected` with `TaskCanceledException`; a null stream on the JSON read gives `Unexpected` |
 | 2026-11-15 | Release A, 3.3.1: build, tests, and the package (Release build with `PackageOutputPath` in the session's scratchpad) | Windows 11, SDK 11.0.100 | 0 warnings in both builds; 216/216 on the .NET targets, 183/183 on `net48`. `Forge.Next.Formatters.3.3.1.nupkg`: version 3.3.1, the DLLs' file version 3.3.1.0, `<license type="expression">Apache-2.0</license>`, `lib/` for all five targets, every XML documentation file parses (98 members, 88 on `net48` without the Brotli classes), every dependency group `Forge.Next.Shared` 3.3.2 and `SoapFormatter` 1.1.9 as in `CLAUDE.md`; the packed README and logo are the repository's (SHA-256). `artifacts/`: the nine packages unchanged |
+| 2026-11-15 | B3: the tests before the change of the tests | Windows 11, SDK 11.0.100, `net10.0` | With the library changed, exactly the 25 tests that pinned a cancellation as an error failed (the 24 of A6 and the A2 test); all others passed |
+| 2026-11-15 | B3: build and tests | Windows 11, SDK 11.0.100, the installed .NET 8, 9, 10 and 11 runtimes and .NET Framework 4.8 | 0 warnings, 0 errors. 220/220 on `net8.0`, `net9.0`, `net10.0` and `net11.0`; 187/187 on `net48` |
+| 2026-11-15 | B3: the README's cancellation examples, in the scratch console program | Windows 11, `net10.0` | A cancelled GZip write throws `TaskCanceledException`; a cancelled XML write throws and leaves the output empty; a cancelled `FileInfo` write throws and leaves the existing 3-byte file as it was |
 
 ## Not verified yet
 
-See `OPEN.md`. In short:
-- no test runs `DataFormatterExtensions` with a cancelled token.
+Nothing at the moment (`OPEN.md`).

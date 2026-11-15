@@ -440,4 +440,79 @@ public class DataFormatterExtensionsTests
         Assert.Same(expected, result.Value);
         await mock.Received(1).ReadAsync(Arg.Any<Stream>(), Arg.Any<CancellationToken>());
     }
+
+    // ------------------------------------------------------------------
+    // Cancellation
+    // ------------------------------------------------------------------
+
+    /// <summary>
+    /// A cancelled token on the file write throws <see cref="OperationCanceledException"/> before the file is
+    /// opened, so an existing file keeps its content (since 3.4.0; before, the file was truncated and an error
+    /// returned).
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_FileCancelledToken_ThrowsAndKeepsExistingFile_Test()
+    {
+        // Arrange: an existing file with known content.
+        SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
+        string path = Path.Combine(Path.GetTempPath(), "fnf_" + Guid.NewGuid().ToString("N") + ".json");
+        byte[] existing = new byte[] { 1, 2, 3 };
+        File.WriteAllBytes(path, existing);
+
+        try
+        {
+            // Act & Assert: thrown, and the file is untouched.
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => formatter.WriteAsync(new FormatterExtSample { Name = "Forge", Value = 1 }, new FileInfo(path), cancellationToken: new CancellationToken(canceled: true)));
+            Assert.Equal(existing, File.ReadAllBytes(path));
+        }
+        finally
+        {
+            // Clean up the temporary file regardless of the test outcome.
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// A cancelled token on the file read throws <see cref="OperationCanceledException"/> (since 3.4.0).
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_FileCancelledToken_ThrowsOperationCanceledException_Test()
+    {
+        // Arrange: a valid compressed file, written with a token that is not cancelled.
+        SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
+        string path = Path.Combine(Path.GetTempPath(), "fnf_" + Guid.NewGuid().ToString("N") + ".json.gz");
+
+        try
+        {
+            Assert.False((await formatter.WriteAsync(new FormatterExtSample { Name = "Forge", Value = 1 }, new FileInfo(path))).IsError);
+
+            // Act & Assert
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(
+                () => formatter.ReadAsync(new FileInfo(path), cancellationToken: new CancellationToken(canceled: true)));
+        }
+        finally
+        {
+            // Clean up the temporary file regardless of the test outcome.
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// The stream overloads pass the token on: with the GZip layer, a cancelled token throws
+    /// <see cref="OperationCanceledException"/> from the formatter, and nothing reaches the target stream
+    /// (since 3.4.0).
+    /// </summary>
+    [Fact]
+    public async Task WriteAsync_StreamCancelledToken_ThrowsOperationCanceledException_Test()
+    {
+        // Arrange
+        SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
+        using MemoryStream output = new MemoryStream();
+
+        // Act & Assert
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => formatter.WriteAsync(new FormatterExtSample { Name = "Forge", Value = 1 }, output, compress: true, cancellationToken: new CancellationToken(canceled: true)));
+        Assert.Equal(0, output.Length);
+    }
 }

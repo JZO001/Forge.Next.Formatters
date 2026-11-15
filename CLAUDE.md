@@ -65,20 +65,23 @@ formatter, and dependency-injection registrations. Read in this order:
    `net11.0` with the shared framework), and `SystemJsonFormatter<T>` needs System.Text.Json on `net48`. A new `Forge.Next.Shared` version can change all three: check the restored graph
    (`Forge.Next.Formatters/obj/project.assets.json`) and the package's `.nuspec`. Do not add a package without asking.
 3. **One source for every target.** `net48` is the only target without `NETCOREAPP`. Code that cannot exist there sits
-   behind `#if NETCOREAPP`: the two Brotli formatters and their registrations, `FlushFinalBlockAsync`,
-   `DisposeAsync`, and `StreamWriter.FlushAsync` with a token, each with a synchronous or token-less fallback where one
-   exists. The README says which targets lack a feature.
+   behind `#if NETCOREAPP`: the two Brotli formatters and their registrations, `FlushFinalBlockAsync` and
+   `DisposeAsync`, each with a synchronous fallback. The README says which targets lack a feature.
 4. **Expected failures are `ErrorOr` values, not exceptions.**
    - Every method that does work checks its arguments first and returns a `Validation` error whose description is the
      parameter name (`inputStream`, `outputStream`, `data`, `BufferSize`, `formatter`, `stream`, `file`).
      `SystemJsonFormatter<T>.ReadAsync` is the one such method without a null check.
-   - The work runs inside `ProtectAsync` from `Forge.Next.Shared`, with its defaults: every exception, a cancellation
-     included, becomes `Unexpected` errors, one per exception in the inner-exception chain, with the metadata `type`,
-     `message` and `stackTrace`. Passing `rethrowCancellation` or `includeStackTrace` changes what callers get: a public
+   - The work runs inside `ProtectAsync` from `Forge.Next.Shared`, with the caller's token and
+     `rethrowCancellation: true` (since 3.4.0, B3): the caller's own cancellation throws `OperationCanceledException`;
+     every other exception, a cancellation the token did not request included, becomes `Unexpected` errors, one per
+     exception in the inner-exception chain, with the metadata `type`, `message` and `stackTrace` (`includeStackTrace`
+     at its default). The XML and SOAP formatters and the `FileInfo` overloads of `DataFormatterExtensions` check the
+     token before their work, so a cancelled call does nothing. Changing any of this changes what callers get: a public
      change.
    - The two-stream `ReadAsync` of the XML, SOAP and JSON formatters returns `Forbidden`, "Method not implemented.".
-   - Only constructors and property setters throw: `ArgumentNullException` for a null certificate, IV, key or
-     `SoapFormatter`, and `InvalidDataException` for an IV that is not 16 bytes or a key that is not 32. The stream
+   - Besides the caller's own cancellation, only constructors and property setters throw: `ArgumentNullException` for a
+     null certificate, IV, key or `SoapFormatter`, and `InvalidDataException` for an IV that is not 16 bytes or a key
+     that is not 32. The stream
      overloads of `DataFormatterExtensions` let an exception of an application's own formatter pass (`AI/DESIGN.md`).
 5. **The caller's streams stay open.** The compression streams and the XML reader and writer are created with
    `leaveOpen: true`, and the AES `CryptoStream` is never disposed. Callers rewind and reuse a stream after

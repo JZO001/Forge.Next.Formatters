@@ -5,7 +5,7 @@ Reference, practice and pattern implementations of **data formatters** for .NET:
 shares one small, predictable, `async` contract and never throws for expected failures — it returns
 an [`ErrorOr<T>`](https://github.com/amantinband/error-or) result instead.
 
-- **Package version:** `3.3.1`
+- **Package version:** `3.4.0`
 - **Target frameworks:** `net48` (without the Brotli formatters), `net8.0`, `net9.0`, `net10.0`, `net11.0`
 - **License:** Apache-2.0
 - **Package dependencies:** [`Forge.Next.Shared`](https://www.nuget.org/packages/Forge.Next.Shared), [`SoapFormatter`](https://www.nuget.org/packages/SoapFormatter)
@@ -181,20 +181,21 @@ The library produces three kinds of errors:
 |------------|------|
 | `Validation` | An argument was `null`, or `BufferSize <= 0`. The arguments are checked before any work, and the `Description` is the offending parameter name, e.g. `"inputStream"` or `"BufferSize"`. |
 | `Forbidden` | The unimplemented `ReadAsync(inputStream, outputStream)` overload of the serialization formatters. `Description` is `"Method not implemented."`. |
-| `Unexpected` | Any exception raised inside the operation (corrupt data, a non-readable stream, a wrong AES key, a cancelled token, …) is caught and returned instead of propagating. You get **one error per exception in the inner-exception chain**, each with `Code` `"General.Unexpected"`, `Description` set to the exception's message, and `Metadata` with three entries: `"type"` (the exception's assembly-qualified type name), `"message"` and `"stackTrace"`. |
+| `Unexpected` | Any exception raised inside the operation (corrupt data, a non-readable stream, a wrong AES key, a cancellation you did not request such as an inner timeout, …) is caught and returned instead of propagating. Your own cancellation is the exception: it is thrown (see [Cancellation](#cancellation)). You get **one error per exception in the inner-exception chain**, each with `Code` `"General.Unexpected"`, `Description` set to the exception's message, and `Metadata` with three entries: `"type"` (the exception's assembly-qualified type name), `"message"` and `"stackTrace"`. |
 
 Internally the "catch every exception and turn it into an errored result" behavior is provided by
-the `ProtectAsync` wrapper from `Forge.Next.Shared`, which every operation runs inside. You never
-call it directly; it is the reason a corrupt payload becomes `result.IsError == true` rather than a
-thrown exception.
+the `ProtectAsync` wrapper from `Forge.Next.Shared`, which every operation runs inside (with your
+token and `rethrowCancellation: true` since 3.4.0). You never call it directly; it is the reason a
+corrupt payload becomes `result.IsError == true` rather than a thrown exception.
 
 > The `"stackTrace"` and `"message"` metadata describe the library's internals. Log them, but do not
 > pass these errors unfiltered to an end user or across a trust boundary (see
 > [Security notes](#security-notes)).
 
-Only constructors and property setters throw: `ArgumentNullException` for a `null` certificate, IV,
-key or `SoapFormatter`, and `InvalidDataException` for an IV that is not 16 bytes or a key that is
-not 32 bytes.
+What does throw: the methods throw `OperationCanceledException` when your `CancellationToken`
+requested cancellation (since 3.4.0); constructors and property setters throw `ArgumentNullException`
+for a `null` certificate, IV, key or `SoapFormatter`, and `InvalidDataException` for an IV that is not
+16 bytes or a key that is not 32 bytes.
 
 ### A note about streams and `Position`
 
@@ -231,22 +232,32 @@ expose `BufferSize` at all.
 
 ### Cancellation
 
-Every method takes a `CancellationToken` as its last parameter (`= default`). A cancellation does
-**not** throw: like any other exception inside an operation it comes back as an `Unexpected` error,
-whose `"type"` metadata names an `OperationCanceledException` (or a subclass such as
-`TaskCanceledException`).
+Every method takes a `CancellationToken` as its last parameter (`= default`). Since 3.4.0, when
+**your** token requests cancellation, the method throws `OperationCanceledException` (or a subclass
+such as `TaskCanceledException`), as .NET methods do; it is not returned as an error. A cancellation
+that your token did not request, for example a stream's own timeout, is still an `Unexpected` error.
+Before 3.4.0 every cancellation came back as an `Unexpected` error.
 
-Not every formatter observes the token:
+```csharp
+try
+{
+    ErrorOr<byte[]?> result = await formatter.ReadAsync(input, cancellationToken);
+    // handle result.IsError as usual
+}
+catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+{
+    // the caller cancelled
+}
+```
+
+How the formatters observe the token:
 
 | Formatter | Observes the token |
 |-----------|--------------------|
-| GZip, Brotli and AES formatters (both shapes) | Yes, on every read and write of the copy loop. |
-| `SystemJsonFormatter<T>` | Yes, through `JsonSerializer`. |
-| `XmlDataFormatter<T>.ReadAsync` | No: `XmlSerializer.Deserialize` is synchronous. |
-| `XmlDataFormatter<T>.WriteAsync` | Only on the .NET targets, and only at the final flush, after the XML has been serialized: the method then returns the cancellation error, **but the complete XML is still written to the output** when the writer is disposed. On `net48` it does not observe the token at all. |
-| `XmlSoapFormatter<T>` | No: `SoapFormatter` is synchronous. |
-
-The `DataFormatterExtensions` pass the token on to the formatter and to their GZip layer.
+| GZip, Brotli and AES formatters (both shapes) | On every read and write of the copy loop. |
+| `SystemJsonFormatter<T>` | Through `JsonSerializer`. |
+| `XmlDataFormatter<T>`, `XmlSoapFormatter<T>` | Once, before the synchronous serializer starts: a cancelled call reads or writes nothing; once started, the call completes. |
+| `DataFormatterExtensions` | They pass the token on to the formatter and their GZip layer; the `FileInfo` overloads also check it before they open the file, so a cancelled write leaves an existing file untouched. |
 
 ---
 
@@ -640,7 +651,7 @@ everything below.
 
 - `CryptoFormatterBase()` — generates a random IV (16 bytes) and key (32 bytes) with
   `RandomNumberGenerator`, a cryptographic random number generator, on every target. Versions before
-  3.3.1 used `System.Random`, which is predictable; on `net48` two instances created at the same moment
+  3.4.0 used `System.Random`, which is predictable; on `net48` two instances created at the same moment
   could even get the same IV and key.
 - `CryptoFormatterBase(X509Certificate2 certificate)` — derives the IV and key from the
   certificate's **public** key. Throws `ArgumentNullException` if `certificate` is `null`. Anyone who
@@ -829,9 +840,10 @@ argument. With the GZip layer, the whole payload passes through memory: `WriteAs
 a `MemoryStream` before compressing it, and `ReadAsync` decompresses the whole input into a
 `MemoryStream` before the formatter reads it.
 
-> The `FileInfo` overloads catch every exception, like the formatters do. The `Stream` overloads do
-> not wrap the formatter call: the library's formatters never throw there, but an exception thrown
-> by your own `IDataFormatter<T>` implementation passes through them.
+> The `FileInfo` overloads catch every exception except your own cancellation, like the formatters do.
+> The `Stream` overloads do not wrap the formatter call: the library's formatters throw nothing there
+> but your own cancellation, while any exception thrown by your own `IDataFormatter<T>`
+> implementation passes through them.
 
 **Example — write and read a compressed file**
 
@@ -1104,10 +1116,16 @@ ErrorOr<byte[]?> corrupt = await aes.ReadAsync(garbage);
 // corrupt.FirstError.Type == ErrorType.Unexpected
 // corrupt.FirstError.Metadata["type"] names the exception; "message" and "stackTrace" too
 
-// A cancelled token -> Unexpected error as well (no OperationCanceledException is thrown)
+// Your own cancellation -> OperationCanceledException is thrown (since 3.4.0), not returned
 formatter.BufferSize = Consts.DefaultBufferSize;
-ErrorOr<Success> cancelled = await formatter.WriteAsync(new byte[] { 1 }, new MemoryStream(), new CancellationToken(canceled: true));
-// cancelled.FirstError.Type == ErrorType.Unexpected
+try
+{
+    await formatter.WriteAsync(new byte[] { 1 }, new MemoryStream(), new CancellationToken(canceled: true));
+}
+catch (OperationCanceledException)
+{
+    // cancelled
+}
 ```
 
 Handy `ErrorOr<T>` members:
@@ -1134,7 +1152,7 @@ Handy `ErrorOr<T>` members:
   [Deriving keys from a certificate](#deriving-keys-from-a-certificate)). For an RSA 2048
   certificate with the usual exponent 65537, moreover, 9 of the 16 IV bytes and 5 of the 32 key
   bytes are the same for every certificate (the DER header and the exponent).
-- **The generated keys.** Since 3.3.1 the parameterless AES constructors use a cryptographic random
+- **The generated keys.** Since 3.4.0 the parameterless AES constructors use a cryptographic random
   number generator. Earlier versions used `System.Random`, which is predictable, and on `net48`
   formatters created at the same moment got the same key; treat data encrypted with such a
   generated key as weakly protected.

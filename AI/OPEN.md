@@ -21,21 +21,14 @@ The order and the way to fix them: `PLANS/RECOMMENDED_WAY_TO_FIX.md` (2026-11-12
   none. `artifacts/Forge.Next.Formatters.3.2.5.nupkg` was rebuilt on 2026-11-02 and depends on `Forge.Next.Shared`
   3.3.0, while the 3.2.5 commit references 3.1.0: if 3.2.5 is published, the local file is not the published one, so do
   not publish it again. Release A is committed as 3.3.1, which will not be published (Zoltán, 2026-11-15); the next
-  published version is 3.4.0, with B3, and it carries the new icon. The release build into `artifacts/` is Zoltán's.
-- **The serializers and the token** (found 2026-11-15, pinned by tests and described in the README's "Cancellation";
-  input for B3 of the plan):
-  - the XML read and both SOAP methods do not use the token: a cancelled token does not stop them;
-  - the XML write passes the token only to `StreamWriter.FlushAsync`, which has no token overload on `net48`: a
-    cancelled token gives an `Unexpected` error on the .NET targets and success on `net48`;
-  - on the .NET targets that error comes after the data is written: `Serialize` fills the writer, the cancelled
-    `FlushAsync` throws, and disposing the `StreamWriter` flushes the whole XML into the output anyway. The caller gets
-    an error while the output holds the complete document. Checking the token before `Serialize` would make a cancelled
-    write write nothing, the same on every target.
+  published version is 3.4.0, with B3 (in the working tree since 2026-11-15), and it carries the new icon. The release
+  build into `artifacts/` is Zoltán's.
+- **Forge.Next.Formatters.Newtonsoft follows B3** (its plan's B1, the same decision): it can take it once this
+  package's 3.4.0 is out.
 
 ## Not verified yet
 
-- **`DataFormatterExtensions` and the token:** the extensions pass the token on to the formatters (the mocks of
-  `DataFormatterExtensionsTests` accept any token); no test runs them with a cancelled one.
+Nothing at the moment.
 
 ## Ideas, not decided
 

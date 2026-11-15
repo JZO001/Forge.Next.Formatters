@@ -23,15 +23,19 @@ public class XmlDataFormatter<T> : IXmlDataFormatter<T>
     /// <param name="inputStream">The input stream containing the XML data.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result contains the deserialized object of type T.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<T?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {
         if (inputStream is null) return Task.FromResult((ErrorOr<T?>)Error.Validation(description: nameof(inputStream)));
 
         return this.ProtectAsync<XmlDataFormatter<T>, T?>(async (_, _) =>
         {
+            // Checked once here: the synchronous serializer below cannot observe the token.
+            cancellationToken.ThrowIfCancellationRequested();
+
             using StreamReader sr = new StreamReader(inputStream, Encoding, detectEncodingFromByteOrderMarks: true, bufferSize: Consts.DefaultBufferSize, leaveOpen: true);
             return (T?)new XmlSerializer(typeof(T)).Deserialize(sr);
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
     /// <summary>
@@ -53,6 +57,7 @@ public class XmlDataFormatter<T> : IXmlDataFormatter<T>
     /// <param name="outputStream">The output stream to write the XML data to.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
     /// <returns>A task that represents the asynchronous operation. The task result indicates whether the operation was successful.</returns>
+    /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Success>> WriteAsync(T data, Stream outputStream, CancellationToken cancellationToken = default)
     {
         if (data is null) return Task.FromResult((ErrorOr<Success>)Error.Validation(description: nameof(data)));
@@ -60,16 +65,16 @@ public class XmlDataFormatter<T> : IXmlDataFormatter<T>
 
         return this.ProtectAsync<XmlDataFormatter<T>, Success>(async (_, _) =>
         {
+            // Checked once here: the synchronous serializer below cannot observe the token; once it has
+            // started, the write completes, so a cancelled call writes nothing and a started one writes everything.
+            cancellationToken.ThrowIfCancellationRequested();
+
             using StreamWriter sw = new StreamWriter(outputStream, encoding: Encoding, bufferSize: Consts.DefaultBufferSize, leaveOpen: true);
             new XmlSerializer(typeof(T)).Serialize(sw, data);
-#if NETCOREAPP
-            await sw.FlushAsync(cancellationToken).ConfigureAwait(false);
-#else
             await sw.FlushAsync().ConfigureAwait(false);
-#endif
 
             return Result.Success;
-        });
+        }, rethrowCancellation: true, cancellationToken: cancellationToken);
     }
 
 }

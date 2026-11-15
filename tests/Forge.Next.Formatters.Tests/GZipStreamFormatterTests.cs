@@ -293,12 +293,12 @@ public class GZipStreamFormatterTests
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// A cancelled token stops the single-stream read. The cancellation comes back as an
-    /// <see cref="ErrorType.Unexpected"/> error made from the cancellation exception, not as a thrown
-    /// exception, because the work runs in <c>ProtectAsync</c> with its defaults.
+    /// A cancelled token stops the single-stream read, and the caller's own cancellation is thrown as an
+    /// <see cref="OperationCanceledException"/> (since 3.4.0; before, it came back as an
+    /// <see cref="ErrorType.Unexpected"/> error).
     /// </summary>
     [Fact]
-    public async Task ReadAsync_CancelledToken_ReturnsCancellationError_Test()
+    public async Task ReadAsync_CancelledToken_ThrowsOperationCanceledException_Test()
     {
         // Arrange: a valid payload, written with a token that is not cancelled.
         GZipStreamFormatter formatter = new GZipStreamFormatter();
@@ -307,20 +307,16 @@ public class GZipStreamFormatterTests
         Assert.False((await formatter.WriteAsync(source, payload)).IsError);
         payload.Position = 0;
 
-        // Act
-        ErrorOr<Stream?> result = await formatter.ReadAsync(payload, new CancellationToken(canceled: true));
-
-        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
-        Assert.True(result.IsError);
-        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
-        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+        // Act & Assert: the caller's own cancellation is thrown, not returned as an error.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => formatter.ReadAsync(payload, new CancellationToken(canceled: true)));
     }
 
     /// <summary>
-    /// A cancelled token stops the two-stream read, with the same cancellation error.
+    /// A cancelled token stops the two-stream read, and throws the same way.
     /// </summary>
     [Fact]
-    public async Task ReadAsyncWithOutput_CancelledToken_ReturnsCancellationError_Test()
+    public async Task ReadAsyncWithOutput_CancelledToken_ThrowsOperationCanceledException_Test()
     {
         // Arrange: a valid payload, written with a token that is not cancelled.
         GZipStreamFormatter formatter = new GZipStreamFormatter();
@@ -330,28 +326,41 @@ public class GZipStreamFormatterTests
         payload.Position = 0;
         using MemoryStream output = new MemoryStream();
 
-        // Act
-        ErrorOr<Success> result = await formatter.ReadAsync(payload, output, new CancellationToken(canceled: true));
-
-        // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
-        Assert.True(result.IsError);
-        Assert.Equal(ErrorType.Unexpected, result.FirstError.Type);
-        Assert.True(typeof(OperationCanceledException).IsAssignableFrom(Type.GetType((string)result.FirstError.Metadata!["type"])));
+        // Act & Assert: the caller's own cancellation is thrown, not returned as an error.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => formatter.ReadAsync(payload, output, new CancellationToken(canceled: true)));
     }
 
     /// <summary>
-    /// A cancelled token stops the write, with the same cancellation error.
+    /// A cancelled token stops the write, and throws the same way.
     /// </summary>
     [Fact]
-    public async Task WriteAsync_CancelledToken_ReturnsCancellationError_Test()
+    public async Task WriteAsync_CancelledToken_ThrowsOperationCanceledException_Test()
     {
         // Arrange
         GZipStreamFormatter formatter = new GZipStreamFormatter();
         using MemoryStream source = new MemoryStream(new byte[] { 1, 2, 3, 4 });
         using MemoryStream output = new MemoryStream();
 
+        // Act & Assert: the caller's own cancellation is thrown, not returned as an error.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => formatter.WriteAsync(source, output, new CancellationToken(canceled: true)));
+    }
+
+    /// <summary>
+    /// A cancellation that the caller did not request, here an <see cref="OperationCanceledException"/>
+    /// thrown by the input stream itself as an inner timeout would, is still returned as an
+    /// <see cref="ErrorType.Unexpected"/> error: only the caller's own cancellation is thrown.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_InnerCancellation_ReturnsUnexpectedError_Test()
+    {
+        // Arrange: a stream that cancels by itself; the caller's token is not cancelled.
+        GZipStreamFormatter formatter = new GZipStreamFormatter();
+        using Stream input = new SelfCancellingStream();
+
         // Act
-        ErrorOr<Success> result = await formatter.WriteAsync(source, output, new CancellationToken(canceled: true));
+        ErrorOr<Stream?> result = await formatter.ReadAsync(input, CancellationToken.None);
 
         // Assert: an Unexpected error, made from an OperationCanceledException (or a subclass of it).
         Assert.True(result.IsError);
@@ -406,5 +415,27 @@ public class GZipStreamFormatterTests
         using MemoryStream buffer = new MemoryStream();
         stream.CopyTo(buffer);
         return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// A readable stream whose every read throws <see cref="OperationCanceledException"/>, as a stream with a
+    /// timeout of its own would.
+    /// </summary>
+    private sealed class SelfCancellingStream : Stream
+    {
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new OperationCanceledException();
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => Task.FromException<int>(new OperationCanceledException());
+#if NETCOREAPP
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => ValueTask.FromException<int>(new OperationCanceledException());
+#endif
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

@@ -15,6 +15,7 @@ public interface IDataFormatter<T>
     /// <param name="inputStream">Content inputStream</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result of the read operation</returns>
+    /// <exception cref="OperationCanceledException">The library's formatters throw it when <paramref name="cancellationToken"/> requested cancellation (since 3.4.0); any other failure is returned as an error.</exception>
     Task<ErrorOr<T?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -24,6 +25,7 @@ public interface IDataFormatter<T>
     /// <param name="outputStream">Output inputStream</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result of the read operation</returns>
+    /// <exception cref="OperationCanceledException">The library's formatters throw it when <paramref name="cancellationToken"/> requested cancellation (since 3.4.0); any other failure is returned as an error.</exception>
     Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -33,6 +35,7 @@ public interface IDataFormatter<T>
     /// <param name="outputStream">Stream that the formatted data has been written</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Result of the write operation</returns>
+    /// <exception cref="OperationCanceledException">The library's formatters throw it when <paramref name="cancellationToken"/> requested cancellation (since 3.4.0); any other failure is returned as an error.</exception>
     Task<ErrorOr<Success>> WriteAsync(T data, Stream outputStream, CancellationToken cancellationToken = default);
 
 }
