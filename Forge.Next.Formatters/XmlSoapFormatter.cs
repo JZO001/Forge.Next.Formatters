@@ -7,7 +7,7 @@ namespace Forge.Next.Formatters;
 /// <summary>
 /// Implementation of the IXmlSoapFormatter interface using the SoapFormatter for XML serialization and deserialization.
 /// </summary>
-/// <typeparam name="T"></typeparam>
+/// <typeparam name="T">The type to serialize; it must be marked <see cref="SerializableAttribute"/>.</typeparam>
 public class XmlSoapFormatter<T> : IXmlSoapFormatter<T>
 {
 

@@ -51,6 +51,7 @@
 | 2026-11-16 | The SOAP read leaves the input open: `ReadAsync_InputStream_StaysOpen_Test` before and after the fix | Windows 11, SDK 11.0.100, `net10.0` and `net48` | Before: failed on both (the stream closed after the first read). After deserializing an in-memory copy: passes |
 | 2026-11-16 | Which types reach a SOAP binder, in the scratch console program (`net10.0` and `net48`) | Windows 11, SDK 11.0.100 | `net10.0`: every type, those of `System.Private.CoreLib` too (`List<T>`, `ArrayList`, `Version`), and `System.Uri`; an array is asked for by its element type. `net48`: the root type, custom types and `System.Uri` (System.dll), but not the types of `mscorlib` (`List<T>`, `ArrayList`, `Version`), which are created without the binder |
 | 2026-11-16 | B4, the JSON null check, the SOAP stream fix and `WithAllowedTypes`: build and tests | Windows 11, SDK 11.0.100, the installed .NET 8, 9, 10 and 11 runtimes and .NET Framework 4.8 | 0 warnings, 0 errors. 263/263 on the .NET targets, 230/230 on `net48`; the collections test pins the `net48` difference |
+| 2026-11-16 | C2, C4, C5, C6: build and tests | Windows 11, SDK 11.0.100, the installed .NET 8, 9, 10 and 11 runtimes and .NET Framework 4.8 | 0 warnings, 0 errors (the new XML documentation included); 263/263 on the .NET targets, 230/230 on `net48`, with the 16 renamed tests and without the Shouldly reference. `git check-ignore`: `main.txt` ignored by `/*.txt`, `prompts/init_tests.txt` not |
 
 ## Not verified yet
 

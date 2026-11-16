@@ -8,7 +8,8 @@ namespace Forge.Next.Formatters;
 /// <summary>
 /// Implementation of IXmlDataFormatter for serializing and deserializing XML data
 /// </summary>
-/// <typeparam name="T"></typeparam>
+/// <typeparam name="T">The type to serialize: a public type with a public parameterless constructor and public
+/// read/write members.</typeparam>
 public class XmlDataFormatter<T> : IXmlDataFormatter<T>
 {
 

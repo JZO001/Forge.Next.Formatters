@@ -1,7 +1,8 @@
 ﻿namespace Forge.Next.Formatters;
 
 /// <summary>
-/// Interface for IGZipStreamFormatter
+/// GZip compression of a stream: an <see cref="IDataFormatter{T}"/> of <see cref="Stream"/> with a buffer size,
+/// implemented by <see cref="GZipStreamFormatter"/>.
 /// </summary>
 public interface IGZipStreamFormatter : IDataFormatter<Stream>
 {

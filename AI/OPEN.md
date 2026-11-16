@@ -34,12 +34,4 @@ Nothing at the moment.
   binder there, so `WithAllowedTypes` refuses only the types of other assemblies on that target (2026-11-16,
   `VERIFICATION.md`; the README says to read trusted SOAP input only on `net48`). A default restrictive binder (B4
   option (c)) would need a major version; Zoltán chose the opt-in (b).
-- **`ms.SetLength(0)`** in `AesByteArrayFormatter.WriteAsync` and `BrotliByteArrayFormatter.WriteAsync`, just before the
-  `MemoryStream` over the caller's array is disposed, has no effect: it does not clear the array.
 - **The Brotli interfaces on `net48`** have no implementation there (documented in the README since 2026-11-15).
-- **The tests:** the `DataFormatterExtensionsTests` method names still say `Read_` and `Write_`; Shouldly is referenced
-  but not used.
-- **The XML documentation:** several summaries only repeat the type's name ("Interface for IDataFormatter");
-  `AesByteArrayFormatter`'s calls the class an interface; the `T` of `CryptoFormatterBase<T>`, `XmlDataFormatter<T>` and
-  `XmlSoapFormatter<T>`, and the `iv` and `key` of `CryptoFormatterBase(byte[], byte[])`, have empty descriptions.
-- **`<branch>.txt`**, which `/crt.commit.msg` writes, is not ignored by git; a `main.txt` was committed once, in 3.2.2.

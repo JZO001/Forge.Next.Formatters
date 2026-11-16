@@ -22,8 +22,8 @@ formatter, and dependency-injection registrations. Read in this order:
   git commands that change the repository, and do not publish, unless asked. The `/commit.changes` command is such a
   request: it runs the tests and commits, without pushing. It skips the tests when nothing but the knowledge base, other
   Markdown files, or the instruction and prompt files under `.claude/` and `.github/` changed, and says so in its
-  report. `/crt.commit.msg` only writes the message into `<branch>.txt` in the repository root, a file git does not
-  ignore.
+  report. `/crt.commit.msg` only writes the message into `<branch>.txt` in the repository root, which git ignores
+  (`/*.txt` in `.gitignore`, since 2026-11-16).
 - **Working style:**
   - one topic at a time;
   - options with a recommendation;
@@ -120,7 +120,7 @@ formatter, and dependency-injection registrations. Read in this order:
 - **Tests** (`tests/Forge.Next.Formatters.Tests`, every target of the library, `LangVersion` 12.0):
   - on `net48` the two Brotli test files are left out in the csproj, and Brotli cases in other test files sit behind
     `#if NETCOREAPP`;
-  - xUnit 2 with its `Assert`, NSubstitute for mocks; Shouldly is referenced but not used;
+  - xUnit 2 with its `Assert`, NSubstitute for mocks (the unused Shouldly reference was removed on 2026-11-16);
   - one test class per tested class (`<Class>Tests`, in a file of that name, in one flat folder); a sample data type
     sits in the test file that uses it;
   - test methods named `Member_Condition_Outcome_Test` (in `ConstsTests`: `<Member>Test`), with XML summaries and

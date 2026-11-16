@@ -1,7 +1,8 @@
 ﻿namespace Forge.Next.Formatters;
 
 /// <summary>
-/// Interface for IGZipFormatter
+/// GZip compression of a byte array: an <see cref="IDataFormatter{T}"/> of <c>byte[]</c> with a buffer size,
+/// implemented by <see cref="GZipByteArrayFormatter"/>.
 /// </summary>
 public interface IGZipByteArrayFormatter : IDataFormatter<byte[]>
 {

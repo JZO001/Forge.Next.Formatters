@@ -427,3 +427,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# The commit message that /crt.commit.msg writes into <branch>.txt in the repository root
+/*.txt

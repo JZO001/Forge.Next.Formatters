@@ -3,7 +3,8 @@
 namespace Forge.Next.Formatters;
 
 /// <summary>
-/// Interface for IDataFormatter
+/// The contract of every formatter: it writes (encodes) data of type <typeparamref name="T"/> to a stream and reads
+/// (decodes) it back, asynchronously, and returns expected failures as <c>ErrorOr</c> errors instead of throwing.
 /// </summary>
 /// <typeparam name="T">The type of object to be serialized and deserialized.</typeparam>
 public interface IDataFormatter<T>

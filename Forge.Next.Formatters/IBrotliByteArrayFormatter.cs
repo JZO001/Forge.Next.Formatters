@@ -1,7 +1,8 @@
 ﻿namespace Forge.Next.Formatters;
 
 /// <summary>
-/// Interface for IBrotliByteArrayFormatter
+/// Brotli compression of a byte array: an <see cref="IDataFormatter{T}"/> of <c>byte[]</c> with a buffer size,
+/// implemented by <c>BrotliByteArrayFormatter</c> on the .NET targets; <c>net48</c> has no implementation.
 /// </summary>
 public interface IBrotliByteArrayFormatter : IDataFormatter<byte[]>
 {

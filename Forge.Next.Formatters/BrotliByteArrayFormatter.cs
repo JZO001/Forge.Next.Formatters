@@ -107,7 +107,6 @@ public class BrotliByteArrayFormatter : IBrotliByteArrayFormatter
 
             await brotliStream.FlushAsync(cancellationToken).ConfigureAwait(false);
 
-            ms.SetLength(0);
 
             return Result.Success;
         }, rethrowCancellation: true, cancellationToken: cancellationToken);

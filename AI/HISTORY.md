@@ -433,3 +433,20 @@ trusted SOAP input only on `net48`, and `WithAllowedTypes_ArrayAndList_NeedEleme
 difference. 263 test cases on the .NET targets, 230 on `net48`.
 
 **Compatibility:** none for existing callers: two additions, `SoapAllowedTypesBinder` and `WithAllowedTypes`.
+
+## 2026-11-16 – Clean-ups C2, C4, C5 and C6
+
+**Asked by Zoltán**, from the plan's ideas, the four without a behaviour change; C1 (copying the `IV` and `Key` arrays)
+and C3 (the Brotli interfaces on `net48`) stay as they are.
+- **C2:** the `ms.SetLength(0)` at the end of `AesByteArrayFormatter.WriteAsync` and `BrotliByteArrayFormatter.WriteAsync`
+  is removed: on the `MemoryStream` over the caller's array it cleared nothing. The two in the `catch` blocks of the
+  stream formatters' reads stay: there the stream is the formatter's own.
+- **C4:** the 16 tests of `DataFormatterExtensionsTests` are named after the methods they test (`ReadAsync_…`,
+  `WriteAsync_…`, `WriteAsyncThenReadAsync_…`, renamed in 3.2.5); the unused Shouldly reference is removed from the
+  test project.
+- **C5:** the eleven interfaces and `AesByteArrayFormatter` have summaries that say what they are instead of
+  repeating the name (`IGZipByteArrayFormatter`'s named another interface, `AesByteArrayFormatter`'s called the class an
+  interface); the `T` of `CryptoFormatterBase<T>`, `XmlDataFormatter<T>` and `XmlSoapFormatter<T>`, and the `iv` and
+  `key` of the `CryptoFormatterBase` constructor, are described.
+- **C6:** `.gitignore` ignores `/*.txt`, the `<branch>.txt` that `/crt.commit.msg` writes in the repository root; no
+  other `.txt` file lives there.

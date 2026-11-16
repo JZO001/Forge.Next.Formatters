@@ -10,7 +10,7 @@ namespace Forge.Next.Formatters;
 /// <summary>
 /// Abstract base class for cryptographic formatters that implement the ICryptoFormatter interface. This class provides common functionality for reading and writing encrypted data using a specified initialization vector (IV) and encryption key. It also supports the use of an X509 certificate to derive the IV and key values from the public key of the certificate.
 /// </summary>
-/// <typeparam name="T"></typeparam>
+/// <typeparam name="T">The type of the data: <c>byte[]</c> or <see cref="Stream"/>.</typeparam>
 public abstract class CryptoFormatterBase<T> : ICryptoFormatter<T>
 {
 
@@ -70,8 +70,8 @@ public abstract class CryptoFormatterBase<T> : ICryptoFormatter<T>
     /// <summary>
     /// Initializes a new instance of the <see cref="CryptoFormatterBase{T}"/> class with the specified IV and key values.
     /// </summary>
-    /// <param name="iv"></param>
-    /// <param name="key"></param>
+    /// <param name="iv">The 16-byte initialization vector.</param>
+    /// <param name="key">The 32-byte (AES-256) key.</param>
     /// <exception cref="ArgumentNullException">Thrown when either iv or key is null.</exception>
     protected CryptoFormatterBase(byte[] iv, byte[] key)
     {

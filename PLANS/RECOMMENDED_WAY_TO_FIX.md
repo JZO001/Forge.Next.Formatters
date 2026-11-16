@@ -294,11 +294,12 @@ These are clean-ups without a behaviour change; `AI/OPEN.md` has the details.
 - C1. `IV` and `Key` keep the caller's array, so setting `Certificate` afterwards overwrites that array in place: copy
   the array in the setters.
 - C2. `ms.SetLength(0)` in `AesByteArrayFormatter.WriteAsync` and `BrotliByteArrayFormatter.WriteAsync` does not clear
-  the caller's array. If clearing was the intent, `Array.Clear`; otherwise remove it.
+  the caller's array. If clearing was the intent, `Array.Clear`; otherwise remove it. **Done 2026-11-16: removed.**
 - C3. The Brotli interfaces exist on `net48` without an implementation: document it, or leave them out there (which
   removes public types: a version decision).
 - C4. The tests: the `DataFormatterExtensionsTests` names still say `Read_` and `Write_`; Shouldly is referenced but not
-  used.
+  used. **Done 2026-11-16.**
 - C5. The XML documentation: the summaries that only repeat the type's name, `AesByteArrayFormatter`'s "interface", and
-  the empty `T`, `iv` and `key` descriptions.
+  the empty `T`, `iv` and `key` descriptions. **Done 2026-11-16.**
 - C6. `.gitignore`: the `<branch>.txt` that `/crt.commit.msg` writes; a `main.txt` was committed once, in 3.2.2.
+  **Done 2026-11-16: `/*.txt`.**

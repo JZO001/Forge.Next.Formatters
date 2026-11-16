@@ -6,7 +6,8 @@ using System.Security.Cryptography.X509Certificates;
 namespace Forge.Next.Formatters;
 
 /// <summary>
-/// Interface for AesByteArrayFormatter
+/// Encrypts a byte array with AES-256 into a stream, and decrypts a stream back into a byte array
+/// (<see cref="IAesByteArrayFormatter"/>), in the format that <see cref="CryptoFormatterBase{T}.OutputFormat"/> selects.
 /// </summary>
 public class AesByteArrayFormatter : CryptoFormatterBase<byte[]>, IAesByteArrayFormatter
 {
@@ -176,7 +177,6 @@ public class AesByteArrayFormatter : CryptoFormatterBase<byte[]>, IAesByteArrayF
             csEncrypt.FlushFinalBlock();
 #endif
 
-            ms.SetLength(0);
 
             return Result.Success;
         }, rethrowCancellation: true, cancellationToken: cancellationToken);

@@ -3,7 +3,8 @@
 namespace Forge.Next.Formatters;
 
 /// <summary>
-/// Interface for IXmlDataFormatter
+/// XML serialization with <c>XmlSerializer</c>: an <see cref="IDataFormatter{T}"/> with the text encoding,
+/// implemented by <see cref="XmlDataFormatter{T}"/>.
 /// </summary>
 /// <typeparam name="T">The type of object to be serialized and deserialized.</typeparam>
 public interface IXmlDataFormatter<T> : IDataFormatter<T>

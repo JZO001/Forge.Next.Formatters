@@ -3,7 +3,8 @@
 namespace Forge.Next.Formatters;
 
 /// <summary>
-/// Interface for ICryptoFormatter
+/// An <see cref="IDataFormatter{T}"/> that encrypts on write and decrypts on read with AES-256, configured by the IV,
+/// the key, the buffer size, the output format and whether unauthenticated input is accepted.
 /// </summary>
 /// <typeparam name="T">The type of object to be serialized and deserialized.</typeparam>
 public interface ICryptoFormatter<T> : IDataFormatter<T>

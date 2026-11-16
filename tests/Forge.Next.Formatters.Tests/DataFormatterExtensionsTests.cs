@@ -49,7 +49,7 @@ public class DataFormatterExtensionsTests
     /// <c>ReadAsync(stream)</c> with a null formatter returns a validation error naming "formatter".
     /// </summary>
     [Fact]
-    public async Task Read_NullFormatterWithStream_ReturnsValidationError_Test()
+    public async Task ReadAsync_NullFormatterWithStream_ReturnsValidationError_Test()
     {
         // Arrange: a null formatter reference (extension methods can be invoked on null).
         IDataFormatter<FormatterExtSample> formatter = null!;
@@ -68,7 +68,7 @@ public class DataFormatterExtensionsTests
     /// <c>ReadAsync(stream)</c> with a null stream returns a validation error naming "stream".
     /// </summary>
     [Fact]
-    public async Task Read_NullStream_ReturnsValidationError_Test()
+    public async Task ReadAsync_NullStream_ReturnsValidationError_Test()
     {
         // Arrange
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
@@ -86,7 +86,7 @@ public class DataFormatterExtensionsTests
     /// <c>ReadAsync(file)</c> with a null formatter returns a validation error naming "formatter".
     /// </summary>
     [Fact]
-    public async Task Read_NullFormatterWithFile_ReturnsValidationError_Test()
+    public async Task ReadAsync_NullFormatterWithFile_ReturnsValidationError_Test()
     {
         // Arrange: a null formatter and a harmless (never-opened) file reference.
         IDataFormatter<FormatterExtSample> formatter = null!;
@@ -104,7 +104,7 @@ public class DataFormatterExtensionsTests
     /// <c>ReadAsync(file)</c> with a null file returns a validation error naming "file".
     /// </summary>
     [Fact]
-    public async Task Read_NullFile_ReturnsValidationError_Test()
+    public async Task ReadAsync_NullFile_ReturnsValidationError_Test()
     {
         // Arrange
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
@@ -126,7 +126,7 @@ public class DataFormatterExtensionsTests
     /// <c>WriteAsync(stream)</c> with a null formatter returns a validation error naming "formatter".
     /// </summary>
     [Fact]
-    public async Task Write_NullFormatterWithStream_ReturnsValidationError_Test()
+    public async Task WriteAsync_NullFormatterWithStream_ReturnsValidationError_Test()
     {
         // Arrange
         IDataFormatter<FormatterExtSample> formatter = null!;
@@ -145,7 +145,7 @@ public class DataFormatterExtensionsTests
     /// <c>WriteAsync(stream)</c> with a null stream returns a validation error naming "stream".
     /// </summary>
     [Fact]
-    public async Task Write_NullStream_ReturnsValidationError_Test()
+    public async Task WriteAsync_NullStream_ReturnsValidationError_Test()
     {
         // Arrange
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
@@ -163,7 +163,7 @@ public class DataFormatterExtensionsTests
     /// <c>WriteAsync(file)</c> with a null formatter returns a validation error naming "formatter".
     /// </summary>
     [Fact]
-    public async Task Write_NullFormatterWithFile_ReturnsValidationError_Test()
+    public async Task WriteAsync_NullFormatterWithFile_ReturnsValidationError_Test()
     {
         // Arrange
         IDataFormatter<FormatterExtSample> formatter = null!;
@@ -181,7 +181,7 @@ public class DataFormatterExtensionsTests
     /// <c>WriteAsync(file)</c> with a null file returns a validation error naming "file".
     /// </summary>
     [Fact]
-    public async Task Write_NullFile_ReturnsValidationError_Test()
+    public async Task WriteAsync_NullFile_ReturnsValidationError_Test()
     {
         // Arrange
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
@@ -204,7 +204,7 @@ public class DataFormatterExtensionsTests
     /// object unchanged (the extension simply forwards to the wrapped formatter).
     /// </summary>
     [Fact]
-    public async Task WriteThenRead_StreamWithoutCompression_RoundTrips_Test()
+    public async Task WriteAsyncThenReadAsync_StreamWithoutCompression_RoundTrips_Test()
     {
         // Arrange
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
@@ -231,7 +231,7 @@ public class DataFormatterExtensionsTests
     /// object. A unique temporary file is used and removed afterwards.
     /// </summary>
     [Fact]
-    public async Task WriteThenRead_FileWithoutCompression_RoundTrips_Test()
+    public async Task WriteAsyncThenReadAsync_FileWithoutCompression_RoundTrips_Test()
     {
         // Arrange: a unique temp-file path so parallel test runs never collide.
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
@@ -271,7 +271,7 @@ public class DataFormatterExtensionsTests
     /// branch in isolation (a real GZip decompressor validates the output).
     /// </summary>
     [Fact]
-    public async Task Write_StreamWithCompression_ProducesValidGZip_Test()
+    public async Task WriteAsync_StreamWithCompression_ProducesValidGZip_Test()
     {
         // Arrange
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
@@ -300,7 +300,7 @@ public class DataFormatterExtensionsTests
     /// A NSubstitute mock verifies both the delegation and the passed-through value.
     /// </summary>
     [Fact]
-    public async Task Read_WithoutCompression_DelegatesToFormatter_Test()
+    public async Task ReadAsync_WithoutCompression_DelegatesToFormatter_Test()
     {
         // Arrange: a mock formatter that returns a known object.
         IDataFormatter<FormatterExtSample> mock = Substitute.For<IDataFormatter<FormatterExtSample>>();
@@ -324,7 +324,7 @@ public class DataFormatterExtensionsTests
     /// <see cref="IDataFormatter{T}.WriteAsync(T, Stream, CancellationToken)"/>. Verified with a mock.
     /// </summary>
     [Fact]
-    public async Task Write_WithoutCompression_DelegatesToFormatter_Test()
+    public async Task WriteAsync_WithoutCompression_DelegatesToFormatter_Test()
     {
         // Arrange
         IDataFormatter<FormatterExtSample> mock = Substitute.For<IDataFormatter<FormatterExtSample>>();
@@ -353,7 +353,7 @@ public class DataFormatterExtensionsTests
     /// the inner formatter must be positioned at the beginning, otherwise the formatter sees no bytes.
     /// </summary>
     [Fact]
-    public async Task WriteThenRead_StreamWithCompression_RoundTrips_Test()
+    public async Task WriteAsyncThenReadAsync_StreamWithCompression_RoundTrips_Test()
     {
         // Arrange
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
@@ -382,7 +382,7 @@ public class DataFormatterExtensionsTests
     /// extensions when they do not opt out of compression.
     /// </summary>
     [Fact]
-    public async Task WriteThenRead_FileWithCompression_RoundTrips_Test()
+    public async Task WriteAsyncThenReadAsync_FileWithCompression_RoundTrips_Test()
     {
         // Arrange: a unique temp-file path so parallel test runs never collide.
         SystemJsonFormatter<FormatterExtSample> formatter = new SystemJsonFormatter<FormatterExtSample>();
@@ -418,7 +418,7 @@ public class DataFormatterExtensionsTests
     /// decompression while a mock formatter confirms the delegation and supplies the final value.
     /// </summary>
     [Fact]
-    public async Task Read_WithCompression_DecompressesThenDelegatesToFormatter_Test()
+    public async Task ReadAsync_WithCompression_DecompressesThenDelegatesToFormatter_Test()
     {
         // Arrange: produce a genuine GZip payload so the decompression step succeeds.
         byte[] payload = Encoding.UTF8.GetBytes("the decompressed bytes are irrelevant to the mock");
