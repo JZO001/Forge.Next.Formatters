@@ -30,13 +30,12 @@ Nothing at the moment.
 
 - **`IV` and `Key` keep the caller's array:** setting `Certificate` afterwards overwrites that array in place (the
   README says so since 2026-11-15).
-- **The SOAP formatter and untrusted input:** `SoapFormatter.Deserialize` creates the types that the payload names,
-  unless the caller passes a `SoapFormatter` with its own `Binder`. The README warns since 2026-11-15; a default
-  `Binder` is B4.
+- **The SOAP formatter on `net48`:** the SoapFormatter package creates the types of `mscorlib` without asking the
+  binder there, so `WithAllowedTypes` refuses only the types of other assemblies on that target (2026-11-16,
+  `VERIFICATION.md`; the README says to read trusted SOAP input only on `net48`). A default restrictive binder (B4
+  option (c)) would need a major version; Zoltán chose the opt-in (b).
 - **`ms.SetLength(0)`** in `AesByteArrayFormatter.WriteAsync` and `BrotliByteArrayFormatter.WriteAsync`, just before the
   `MemoryStream` over the caller's array is disposed, has no effect: it does not clear the array.
-- **`SystemJsonFormatter<T>.ReadAsync`** has no null check: a null stream gives `Unexpected`, every other method a
-  `Validation` error. The README documents the difference.
 - **The Brotli interfaces on `net48`** have no implementation there (documented in the README since 2026-11-15).
 - **The tests:** the `DataFormatterExtensionsTests` method names still say `Read_` and `Write_`; Shouldly is referenced
   but not used.

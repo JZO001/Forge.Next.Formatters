@@ -96,12 +96,12 @@ public class SystemJsonFormatterTests
     }
 
     /// <summary>
-    /// The single-stream read overload does not guard its input explicitly; a null stream makes
-    /// <c>JsonSerializer.DeserializeAsync</c> throw, which the <c>ProtectAsync</c> wrapper converts
-    /// into an errored result. We therefore only assert that the operation reports an error.
+    /// A null input stream on the single-stream read yields a validation error naming "inputStream", as in every
+    /// other formatter (since 3.4.0; before, the null stream reached <c>JsonSerializer.DeserializeAsync</c> and came
+    /// back as an <see cref="ErrorType.Unexpected"/> error).
     /// </summary>
     [Fact]
-    public async Task ReadAsync_NullInputStream_ReturnsError_Test()
+    public async Task ReadAsync_NullInputStream_ReturnsValidationError_Test()
     {
         // Arrange
         SystemJsonFormatter<JsonSampleData> formatter = new SystemJsonFormatter<JsonSampleData>();
@@ -111,6 +111,8 @@ public class SystemJsonFormatterTests
 
         // Assert
         Assert.True(result.IsError);
+        Assert.Equal(ErrorType.Validation, result.FirstError.Type);
+        Assert.Equal("inputStream", result.FirstError.Description);
     }
 
     /// <summary>

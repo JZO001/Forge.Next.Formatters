@@ -2,7 +2,7 @@
 
 ## The parts
 
-All 25 types are public, one per file, in the namespace `Forge.Next.Formatters`.
+All 26 types are public, one per file, in the namespace `Forge.Next.Formatters`.
 
 | File | Kind | Role |
 | --- | --- | --- |
@@ -18,7 +18,8 @@ All 25 types are public, one per file, in the namespace `Forge.Next.Formatters`.
 | `CryptoFormatterBase.cs` | abstract class | The IV, the key, the certificate, the buffer size, the output format and `AcceptUnauthenticated`, with their checks; three protected constructors; the authenticated format's writing and the format detection of a read, as `private protected` helpers |
 | `AesByteArrayFormatter.cs`, `AesStreamFormatter.cs` | class | AES through `Aes.Create()` and a `CryptoStream`, in `BufferSize` chunks |
 | `XmlDataFormatter.cs` | class | A new `XmlSerializer` per call, through a `StreamReader` or `StreamWriter` with `Encoding` (UTF-8 by default) |
-| `XmlSoapFormatter.cs` | class | The `SoapFormatter` of the SoapFormatter package: its own, or one passed to the constructor |
+| `XmlSoapFormatter.cs` | class | The `SoapFormatter` of the SoapFormatter package: its own, one passed to the constructor, or, from the static `WithAllowedTypes` (since 3.4.0), one with a `SoapAllowedTypesBinder`. The read deserializes an in-memory copy of the input, because `SoapFormatter.Deserialize` closes the stream it reads (since 3.4.0) |
+| `SoapAllowedTypesBinder.cs` | sealed class (since 3.4.0) | A `SerializationBinder` that returns the allowed type of a full name and throws `SerializationException` for any other; on `net48` the SOAP formatter does not ask it for the types of `mscorlib` |
 | `SystemJsonFormatter.cs` | class | `JsonSerializer` with `SerializerOptions` (`JsonSerializerOptions.Default` by default) |
 | `DataFormatterExtensions.cs` | static class | `ReadAsync` / `WriteAsync` on any `IDataFormatter<T>`, for a `FileInfo` or a `Stream`, with an optional GZip layer (on by default) |
 | `ServiceCollectionExtensions.cs` | static class | `AddForgeFormattersAsTransient`, `AddForgeFormattersAsScoped`, `AddForgeFormattersAsSingleton` |

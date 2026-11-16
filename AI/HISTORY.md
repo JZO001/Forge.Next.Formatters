@@ -390,4 +390,46 @@ targets, 220 on `net48`, all passing; 0 warnings.
 **Compatibility:** a caller that relied on the end position (for example used `Position` as the length, or wrote on at
 the end) sees the stream at 0; a caller that rewinds is unaffected. In 3.4.0.
 
-Left of B4: the null check of `SystemJsonFormatter<T>.ReadAsync`, and a default SOAP `Binder` (each a decision).
+Left of B4 then: the null check of `SystemJsonFormatter<T>.ReadAsync`, and a default SOAP `Binder` (each a decision).
+
+## 2026-11-16 – The JSON read checks its stream (B4, second part)
+
+**Decided by Zoltán:** a `null` stream on `SystemJsonFormatter<T>.ReadAsync` returns a `Validation` error with the
+description `inputStream`, checked before any work, as every other method does; it was the one method without the check,
+and the `null` reached `JsonSerializer.DeserializeAsync`, which made an `Unexpected` error of it. The test
+`ReadAsync_NullInputStream_ReturnsValidationError_Test` asserts the type and the description; the README note and
+`CLAUDE.md` invariant 4 no longer name an exception. In 3.4.0.
+
+**Compatibility:** a caller that passes a `null` stream gets a `Validation` error instead of an `Unexpected` one.
+
+## 2026-11-16 – The SOAP read leaves the caller's stream open (latent bug)
+
+**Found** while answering how the SOAP formatter treats a payload's types: `SoapFormatter.Deserialize` of the
+SoapFormatter package closes the stream it reads, on every target, so `XmlSoapFormatter<T>.ReadAsync` broke `CLAUDE.md`
+invariant 5; rewinding the stream after a read threw `ObjectDisposedException`. No test reused a stream after a SOAP
+read. **Fixed at Zoltán's request:** the read copies the input into a `MemoryStream` (after the token check, with the
+token) and deserializes the copy; the caller's stream stays open, at its end. The test
+`ReadAsync_InputStream_StaysOpen_Test` failed before the fix on `net10.0` and `net48` and passes after it. In 3.4.0.
+
+## 2026-11-16 – Opt-in allowed types for the SOAP read (B4, third part)
+
+**How it was:** since 3.0.0 the default `SoapFormatter` has no binder, so a payload makes it create whatever
+`[Serializable]` types it names, and run their deserialization callbacks, before the cast to `T` fails (checked in a
+scratch program on `net10.0` and `net48`). A caller could already pass a `SoapFormatter` with a `Binder`.
+
+**Decided by Zoltán:** option (b), an opt-in, so nothing changes for existing callers. Not a constructor, because a
+second one-parameter constructor would make `new XmlSoapFormatter<T>(null)` ambiguous, and an `IEnumerable<Type>`
+parameter would change which constructor the DI container picks (it resolves `IEnumerable<>` as an empty list):
+- the public `SoapAllowedTypesBinder` (its own file): matches a type by its full name and returns the allowed type,
+  so a payload that names the same type in another assembly or version gets the allowed one; any other type throws
+  `SerializationException`;
+- the static `XmlSoapFormatter<T>.WithAllowedTypes(params Type[] otherAllowedTypes)`: a formatter whose `SoapFormatter`
+  has that binder for `T` and the given types.
+
+**Found on the way:** the binder is asked for an array's element type, not the array type, and for a generic list type
+itself. On `net48` the SoapFormatter package creates the types of `mscorlib` (`List<T>`, `ArrayList`, `Version`)
+without asking the binder, so there the restriction covers only the types of other assemblies; the README says to read
+trusted SOAP input only on `net48`, and `WithAllowedTypes_ArrayAndList_NeedElementAndListType_Test` pins the
+difference. 263 test cases on the .NET targets, 230 on `net48`.
+
+**Compatibility:** none for existing callers: two additions, `SoapAllowedTypesBinder` and `WithAllowedTypes`.

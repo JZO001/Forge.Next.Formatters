@@ -21,10 +21,12 @@ public class SystemJsonFormatter<T> : ISystemJsonFormatter<T>
     /// </summary>
     /// <param name="inputStream">The input stream containing the JSON data.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous read operation. The task result contains the deserialized object of type T.</returns>
+    /// <returns>A task that represents the asynchronous read operation. The task result contains the deserialized object of type T, or a <c>Validation</c> error with the description <c>inputStream</c> when <paramref name="inputStream"/> is <c>null</c> (since 3.4.0; before, an <c>Unexpected</c> error).</returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<T?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {
+        if (inputStream is null) return Task.FromResult((ErrorOr<T?>)Error.Validation(description: nameof(inputStream)));
+
         return this.ProtectAsync<SystemJsonFormatter<T>, T?>(async (_, _) =>
         {
             return await JsonSerializer.DeserializeAsync<T>(inputStream, SerializerOptions, cancellationToken).ConfigureAwait(false);

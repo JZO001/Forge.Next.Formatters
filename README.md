@@ -33,6 +33,7 @@ an [`ErrorOr<T>`](https://github.com/amantinband/error-or) result instead.
   - [`BrotliStreamFormatter`](#brotlistreamformatter)
   - [`XmlDataFormatter<T>`](#xmldataformattert)
   - [`XmlSoapFormatter<T>`](#xmlsoapformattert)
+  - [`SoapAllowedTypesBinder`](#soapallowedtypesbinder)
   - [`SystemJsonFormatter<T>`](#systemjsonformattert)
   - [`CryptoFormatterBase<T>`](#cryptoformatterbaset)
   - [The AES output formats](#the-aes-output-formats)
@@ -537,20 +538,33 @@ Serializes / deserializes an object of type `T` to SOAP XML using a
 
 > `T` must be marked `[Serializable]`.
 
-> **Read trusted input only.** `SoapFormatter.Deserialize` creates the types that the payload
-> names, not only `T`, so untrusted SOAP input can make it instantiate other types. Unless the input
-> is trusted, pass your own `SoapFormatter` whose `Binder` allows only the types you expect (see
+> **Untrusted input: use `WithAllowedTypes`.** `SoapFormatter.Deserialize` creates the types that
+> the payload names, not only `T`, so untrusted SOAP input can make it create other types (and run
+> their deserialization callbacks) before the cast to `T` fails. The formatters of the constructors
+> below allow that, as every version did. A formatter made with `XmlSoapFormatter<T>.WithAllowedTypes`
+> (since 3.4.0) refuses every type you did not list, before it is created (see
 > [Security notes](#security-notes)).
 
 **Constructors**
 
 - `XmlSoapFormatter()` — creates an internal `SoapFormatter`.
-- `XmlSoapFormatter(SoapFormatter formatter)` — supply your own `SoapFormatter`. Throws
-  `ArgumentNullException` if `formatter` is `null`.
+- `XmlSoapFormatter(SoapFormatter formatter)` — supply your own `SoapFormatter`, for example one with
+  your own `Binder`. Throws `ArgumentNullException` if `formatter` is `null`.
+- `static XmlSoapFormatter<T> WithAllowedTypes(params Type[] otherAllowedTypes)` — since 3.4.0: a
+  formatter whose `SoapFormatter` has a [`SoapAllowedTypesBinder`](#soapallowedtypesbinder) that
+  allows `T` and `otherAllowedTypes` only. List the custom types of `T`'s fields, the element types of
+  its arrays (not the array types), and its generic collections such as `List<OrderLine>`; primitive
+  values and strings need not be listed. A payload that names any other type gives an
+  `Unexpected` error, and that type is not created. Throws `ArgumentNullException` for a `null` array
+  and `ArgumentException` for a `null` element. On `net48`, however, the SoapFormatter package creates the types of `mscorlib` (for example
+  `List<T>`, `ArrayList`, `Version`) without asking the binder, so there the restriction covers only
+  the types of other assemblies; read only trusted SOAP input on `net48`.
 
 **Public members**
 
-- `Task<ErrorOr<T?>> ReadAsync(Stream inputStream, CancellationToken)` — deserialize from SOAP.
+- `Task<ErrorOr<T?>> ReadAsync(Stream inputStream, CancellationToken)` — deserialize from SOAP. It reads
+  the input into memory first, because `SoapFormatter.Deserialize` closes the stream it reads; so
+  `inputStream` stays open, at its end (since 3.4.0; earlier versions closed it).
 - `Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken)` — **not implemented**; always returns a `Forbidden` error.
 - `Task<ErrorOr<Success>> WriteAsync(T data, Stream outputStream, CancellationToken)` — serialize `data` to SOAP.
 
@@ -574,6 +588,9 @@ var formatter = new XmlSoapFormatter<Order>();
 // ...or supply your own SoapFormatter:
 var custom = new XmlSoapFormatter<Order>(new SoapFormatter());
 
+// ...or, for input that is not fully trusted, allow only the types an Order payload contains:
+var restricted = XmlSoapFormatter<Order>.WithAllowedTypes(); // Order has no fields of custom types
+
 var order = new Order { Product = "Widget", Quantity = 5 };
 
 // Serialize to SOAP
@@ -584,6 +601,27 @@ await formatter.WriteAsync(order, soap);
 soap.Position = 0;
 ErrorOr<Order?> read = await formatter.ReadAsync(soap);
 Order restored = read.Value!;   // Product = "Widget", Quantity = 5
+```
+
+---
+
+### `SoapAllowedTypesBinder`
+
+Since 3.4.0. A `SerializationBinder` for the `SoapFormatter` that lets a payload name only the types it
+was given; `XmlSoapFormatter<T>.WithAllowedTypes` uses it. Use it directly when you configure your own
+`SoapFormatter`.
+
+- `SoapAllowedTypesBinder(params Type[] allowedTypes)` — the types a payload may name. Throws
+  `ArgumentNullException` for a `null` array and `ArgumentException` for a `null` element.
+- `Type BindToType(string assemblyName, string typeName)` — returns the allowed type whose full name is
+  `typeName`, whatever assembly or version the payload names; any other type throws a
+  `SerializationException`. A generic type's full name contains its type arguments with their
+  assemblies, so it matches only a payload written with the same ones. On `net48` the types of
+  `mscorlib` do not reach the binder at all (see `WithAllowedTypes`).
+
+```csharp
+var soap = new SoapFormatter { Binder = new SoapAllowedTypesBinder(typeof(Order)) };
+var formatter = new XmlSoapFormatter<Order>(soap);
 ```
 
 ---
@@ -601,10 +639,9 @@ Implements `ISystemJsonFormatter<T> : IDataFormatter<T>`.
 - `Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken)` — **not implemented**; always returns a `Forbidden` error.
 - `Task<ErrorOr<Success>> WriteAsync(T data, Stream outputStream, CancellationToken)` — serialize `data` to JSON.
 
-> Unlike the XML/SOAP formatters, `SystemJsonFormatter<T>.ReadAsync(inputStream)` does not
-> pre-validate a `null` stream: a `null` argument surfaces as an `Unexpected` error rather than a
-> `Validation` error. `WriteAsync` still returns a `Validation`
-> error for a `null` `data` or `outputStream`.
+> Like every other formatter, `SystemJsonFormatter<T>` returns a `Validation` error for a `null`
+> `inputStream`, `data` or `outputStream`. Before 3.4.0 its `ReadAsync(inputStream)` did not check the
+> stream, and a `null` one came back as an `Unexpected` error.
 
 **Example**
 
@@ -1217,8 +1254,10 @@ Handy `ErrorOr<T>` members:
   generated key as weakly protected.
 - **SOAP deserialization creates the types the payload names.** `XmlSoapFormatter<T>.ReadAsync`
   uses `SoapFormatter.Deserialize`, which instantiates whatever types the SOAP input names, not
-  only `T`. Read trusted input only, or pass a `SoapFormatter` whose `Binder` allows only the types
-  you expect.
+  only `T`, and runs their deserialization callbacks before the cast to `T` fails. Read untrusted
+  input with a formatter from `XmlSoapFormatter<T>.WithAllowedTypes` (since 3.4.0), or pass a
+  `SoapFormatter` with a `Binder` of your own. On `net48` a binder never sees the types of `mscorlib`,
+  which the SOAP formatter creates on its own, so there read trusted SOAP input only.
 - **Errors carry internals.** An `Unexpected` error's metadata holds the exception's type, message
   and stack trace. Log it, but do not send it unfiltered to an end user or another system.
 

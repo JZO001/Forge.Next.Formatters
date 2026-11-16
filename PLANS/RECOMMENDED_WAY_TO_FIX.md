@@ -259,14 +259,17 @@ B1.
   once before the synchronous `Serialize` and `Deserialize`, so a cancelled call does no work, the same on every
   target. The A6 tests that pin today's behaviour change with it.
 
-### B4. Smaller behaviour changes [ ] (each a Decision, a minor version)
+### B4. Smaller behaviour changes [x] 2026-11-16 (each a Decision, a minor version)
 
 - Brotli's and AES's returned streams at position 0, as GZip's are since 3.2.5. **Done 2026-11-15 (option (a)), in
   3.4.0.**
 - `SystemJsonFormatter<T>.ReadAsync` checks for a null stream and returns `Validation`, as every other method does;
-  today it is `Unexpected`.
+  today it is `Unexpected`. **Done 2026-11-16, in 3.4.0.**
 - A default `Binder` for the SOAP formatter that refuses every type the caller has not allowed; this breaks callers that
-  read types they never named, so only on Zoltán's word. The README warning of A7 is the minimum.
+  read types they never named, so only on Zoltán's word. The README warning of A7 is the minimum. **Done 2026-11-16 as
+  an opt-in (Zoltán's option (b)), in 3.4.0:** `XmlSoapFormatter<T>.WithAllowedTypes` and `SoapAllowedTypesBinder`; on
+  `net48` it cannot refuse the types of `mscorlib`. Found on the way and fixed: the SOAP read closed the caller's
+  stream.
 
 ### B5. A `net11.0` target [x] 2026-11-15
 

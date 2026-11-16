@@ -69,8 +69,8 @@ formatter, and dependency-injection registrations. Read in this order:
    `DisposeAsync`, each with a synchronous fallback. The README says which targets lack a feature.
 4. **Expected failures are `ErrorOr` values, not exceptions.**
    - Every method that does work checks its arguments first and returns a `Validation` error whose description is the
-     parameter name (`inputStream`, `outputStream`, `data`, `BufferSize`, `formatter`, `stream`, `file`).
-     `SystemJsonFormatter<T>.ReadAsync` is the one such method without a null check.
+     parameter name (`inputStream`, `outputStream`, `data`, `BufferSize`, `formatter`, `stream`, `file`), with no
+     exception since 3.4.0 (B4: `SystemJsonFormatter<T>.ReadAsync` had no null check before).
    - The work runs inside `ProtectAsync` from `Forge.Next.Shared`, with the caller's token and
      `rethrowCancellation: true` (since 3.4.0, B3): the caller's own cancellation throws `OperationCanceledException`;
      every other exception, a cancellation the token did not request included, becomes `Unexpected` errors, one per
@@ -81,12 +81,16 @@ formatter, and dependency-injection registrations. Read in this order:
    - The two-stream `ReadAsync` of the XML, SOAP and JSON formatters returns `Forbidden`, "Method not implemented.".
    - Besides the caller's own cancellation, only constructors and property setters throw: `ArgumentNullException` for a
      null certificate, IV, key or `SoapFormatter`, `InvalidDataException` for an IV that is not 16 bytes or a key that
-     is not 32, and `ArgumentOutOfRangeException` for an undefined `OutputFormat`. The stream overloads of
-     `DataFormatterExtensions` let an exception of an application's own formatter pass (`AI/DESIGN.md`).
+     is not 32, and `ArgumentOutOfRangeException` for an undefined `OutputFormat`; the `SoapAllowedTypesBinder`
+     constructor and the static `XmlSoapFormatter<T>.WithAllowedTypes` throw `ArgumentNullException` for a null array
+     and `ArgumentException` for a null element. The stream overloads of `DataFormatterExtensions` let an exception of
+     an application's own formatter pass (`AI/DESIGN.md`).
 5. **The caller's streams stay open.** The compression streams and the XML reader and writer are created with
    `leaveOpen: true`, and the AES `CryptoStream` is never disposed. Callers rewind and reuse a stream after
    `WriteAsync`; the README's examples and the tests do. Since 3.4.0 the AES read looks at the first 4 bytes of a
-   seekable input and goes back to where it started; an input that cannot seek is copied into memory first.
+   seekable input and goes back to where it started; an input that cannot seek is copied into memory first. The
+   SOAP read deserializes an in-memory copy of the input, because `SoapFormatter.Deserialize` closes the stream it
+   reads (fixed in 3.4.0; before, the SOAP read closed the caller's stream).
 6. **The returned streams.** `GZipStreamFormatter.ReadAsync(stream)` returns a new `MemoryStream` at position 0 (since
    3.2.5; `DataFormatterExtensions.ReadAsync` depends on it). `BrotliStreamFormatter` and `AesStreamFormatter` return
    theirs at position 0 too since 3.4.0 (B4; before, at the end). The caller owns the returned stream.
