@@ -45,6 +45,7 @@
 | 2026-11-15 | B1: the known-answer message, made with a PowerShell script in the session's scratchpad | Windows 11, PowerShell 7 on .NET 10.0.15 | The keys derived with HMAC-SHA256 over the two labels; the hand-made CBC equal to the platform's `EncryptCbc`; a 132-byte message (header, IV `f0..ff`, 80-byte ciphertext of the NIST plaintext, tag) |
 | 2026-11-15 | B1: build and tests | Windows 11, SDK 11.0.100, the installed .NET 8, 9, 10 and 11 runtimes and .NET Framework 4.8 | 0 warnings, 0 errors. With only the library changed, 2 existing tests failed (a non-readable fake stream gave success); after the `CanRead` check all passed. With the new tests: 253/253 on the .NET targets, 220/220 on `net48`; the known-answer message reads back on every target |
 | 2026-11-15 | B1: the writer's output, checked independently in the scratch console program | Windows 11, `net10.0` | A 46-byte plaintext written as `Authenticated`: header `464E4602`, 100 bytes, the tag recomputed with HMAC-SHA256 under the independently derived key matches, and `DecryptCbc` with the derived encryption key returns the plaintext |
+| 2026-11-15 | B4, first part: the returned streams at position 0 | Windows 11, SDK 11.0.100, the installed .NET 8, 9, 10 and 11 runtimes and .NET Framework 4.8 | With only the library changed, exactly the 3 tests that pinned the end position failed (Brotli, AES, and the AES authenticated known answer); after they were changed to position 0: 0 warnings, 253/253 on the .NET targets, 220/220 on `net48` |
 
 ## Not verified yet
 

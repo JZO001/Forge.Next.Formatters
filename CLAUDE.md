@@ -89,7 +89,7 @@ formatter, and dependency-injection registrations. Read in this order:
    seekable input and goes back to where it started; an input that cannot seek is copied into memory first.
 6. **The returned streams.** `GZipStreamFormatter.ReadAsync(stream)` returns a new `MemoryStream` at position 0 (since
    3.2.5; `DataFormatterExtensions.ReadAsync` depends on it). `BrotliStreamFormatter` and `AesStreamFormatter` return
-   theirs at the end. The caller owns the returned stream.
+   theirs at position 0 too since 3.4.0 (B4; before, at the end). The caller owns the returned stream.
 7. **Data written earlier stays readable.** The `Legacy` AES output (the default) is the bare ciphertext of
    `Aes.Create()` with its default mode and padding (the code sets neither), without a header. The `Authenticated`
    output (since 3.4.0, B1) is the header `FNF` `0x02`, a random IV, the AES-256-CBC-PKCS7 ciphertext under a key

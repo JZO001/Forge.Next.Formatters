@@ -20,7 +20,7 @@ public class GZipStreamFormatter : IGZipStreamFormatter
     /// </summary>
     /// <param name="inputStream">The input stream containing GZip-compressed data.</param>
     /// <param name="cancellationToken">A token to monitor for cancellation requests.</param>
-    /// <returns>A task that represents the asynchronous operation. The task result contains the decompressed stream.</returns>
+    /// <returns>A task that represents the asynchronous operation. The task result contains the decompressed stream: a new <see cref="MemoryStream"/> at position 0 (since 3.2.5), owned by the caller.</returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {

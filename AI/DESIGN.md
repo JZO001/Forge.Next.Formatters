@@ -77,8 +77,9 @@ overloads catch everything but the caller's cancellation.
   `leaveOpen: true`. The AES formatters never dispose their `CryptoStream`, and finish a write with
   `FlushFinalBlockAsync` (`FlushFinalBlock` on `net48`).
 - **The returned streams** (`ReadAsync(input)` of the stream formatters) are new `MemoryStream`s that the caller owns:
-  `GZipStreamFormatter`'s at position 0, `BrotliStreamFormatter`'s and `AesStreamFormatter`'s at the end (in both AES
-  formats). On a failure the Brotli and AES ones are emptied and disposed before the exception becomes an error.
+  all three at position 0 (GZip's since 3.2.5, Brotli's and AES's, in both AES formats, since 3.4.0; before, those two
+  were at the end). On a failure the Brotli and AES ones are emptied and disposed before the exception becomes an
+  error.
 - **The AES read looks at the input first** (since 3.4.0): a seekable input is read 4 bytes ahead and set back to
   where it started; an input that cannot seek is copied into memory first (in both formats, so a large
   non-seekable `Legacy` input now costs memory on the two-stream read). A `Legacy` input from a seekable stream is

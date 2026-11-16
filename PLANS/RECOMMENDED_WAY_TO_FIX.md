@@ -261,7 +261,8 @@ B1.
 
 ### B4. Smaller behaviour changes [ ] (each a Decision, a minor version)
 
-- Brotli's and AES's returned streams at position 0, as GZip's are since 3.2.5.
+- Brotli's and AES's returned streams at position 0, as GZip's are since 3.2.5. **Done 2026-11-15 (option (a)), in
+  3.4.0.**
 - `SystemJsonFormatter<T>.ReadAsync` checks for a null stream and returns `Validation`, as every other method does;
   today it is `Unexpected`.
 - A default `Binder` for the SOAP formatter that refuses every type the caller has not allowed; this breaks callers that

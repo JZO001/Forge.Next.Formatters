@@ -379,3 +379,15 @@ input and input not at its start, in both formats. 253 test cases on the .NET ta
 longer compiles until it adds them; the library's classes and every caller are unaffected. The default output stays
 `Legacy`, byte for byte (the A5 tests). Reading now recognizes the authenticated format, copies a non-seekable input
 into memory first, and refuses a non-readable one up front. A minor version (3.4.0).
+
+## 2026-11-15 – The returned streams at position 0 (B4, first part)
+
+**Decided by Zoltán:** option (a). `BrotliStreamFormatter.ReadAsync(input)` and `AesStreamFormatter.ReadAsync(input)`
+(both AES formats) return their new `MemoryStream` at position 0, as `GZipStreamFormatter` has since 3.2.5. The three
+tests that pinned the end position now pin 0; the README's table and examples say so. 253 test cases on the .NET
+targets, 220 on `net48`, all passing; 0 warnings.
+
+**Compatibility:** a caller that relied on the end position (for example used `Position` as the length, or wrote on at
+the end) sees the stream at 0; a caller that rewinds is unaffected. In 3.4.0.
+
+Left of B4: the null check of `SystemJsonFormatter<T>.ReadAsync`, and a default SOAP `Binder` (each a decision).

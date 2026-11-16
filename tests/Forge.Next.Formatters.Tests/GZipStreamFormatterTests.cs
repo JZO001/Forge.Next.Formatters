@@ -16,7 +16,7 @@ namespace Forge.Next.Formatters.Tests;
 /// <list type="bullet">
 ///   <item>All three methods validate that <see cref="GZipStreamFormatter.BufferSize"/> is positive.</item>
 ///   <item>The single-stream read overload returns a <see cref="MemoryStream"/> rewound to position 0
-///   (since 3.2.5; the Brotli and AES stream formatters return theirs at the end).</item>
+///   (since 3.2.5; the Brotli and AES stream formatters since 3.4.0).</item>
 /// </list>
 /// </summary>
 public class GZipStreamFormatterTests

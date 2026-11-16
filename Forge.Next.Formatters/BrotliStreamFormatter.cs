@@ -22,7 +22,7 @@ public class BrotliStreamFormatter : IBrotliStreamFormatter
     /// </summary>
     /// <param name="inputStream">The input stream containing the compressed data.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
-    /// <returns>A task representing the asynchronous operation, containing the decompressed stream or an error.</returns>
+    /// <returns>A task representing the asynchronous operation, containing the decompressed stream or an error. The stream is a new <see cref="MemoryStream"/> at position 0 (since 3.4.0; before, it was at its end), owned by the caller.</returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {
@@ -50,6 +50,8 @@ public class BrotliStreamFormatter : IBrotliStreamFormatter
                 await ms.DisposeAsync().ConfigureAwait(false);
                 throw;
             }
+
+            ms.Position = 0; // the caller receives a readable stream (since 3.4.0; before, it was left at the end)
 
             return ms;
         }, rethrowCancellation: true, cancellationToken: cancellationToken);

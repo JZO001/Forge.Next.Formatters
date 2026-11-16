@@ -11,7 +11,7 @@ namespace Forge.Next.Formatters.Tests;
 /// <summary>
 /// Unit tests for <see cref="BrotliStreamFormatter"/>, which compresses and decompresses a
 /// <see cref="Stream"/> using the Brotli algorithm. The single-stream read overload returns a
-/// decompressed <see cref="Stream"/> positioned at its end, so tests rewind it before reading.
+/// decompressed <see cref="Stream"/> at position 0 (since 3.4.0; before, at its end).
 /// </summary>
 public class BrotliStreamFormatterTests
 {
@@ -276,11 +276,11 @@ public class BrotliStreamFormatterTests
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// The single-stream read returns a new <see cref="MemoryStream"/> positioned at its end (unlike
-    /// <see cref="GZipStreamFormatter"/>, which rewinds it), so the caller rewinds it before reading.
+    /// The single-stream read returns a new <see cref="MemoryStream"/> at position 0, ready to read, as
+    /// <see cref="GZipStreamFormatter"/> does (since 3.4.0; before, it was left at its end).
     /// </summary>
     [Fact]
-    public async Task ReadAsync_ReturnedStream_IsAtEnd_Test()
+    public async Task ReadAsync_ReturnedStream_IsAtPositionZero_Test()
     {
         // Arrange: a valid payload of a known length.
         BrotliStreamFormatter formatter = new BrotliStreamFormatter();
@@ -293,11 +293,11 @@ public class BrotliStreamFormatterTests
         // Act
         ErrorOr<Stream?> result = await formatter.ReadAsync(payload);
 
-        // Assert: the stream holds the original bytes and is at its end.
+        // Assert: the stream holds the original bytes and is at its start.
         Assert.False(result.IsError);
         using Stream decompressed = result.Value!;
         Assert.Equal(original.Length, decompressed.Length);
-        Assert.Equal(decompressed.Length, decompressed.Position);
+        Assert.Equal(0, decompressed.Position);
     }
 
     // ------------------------------------------------------------------
@@ -305,8 +305,8 @@ public class BrotliStreamFormatterTests
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// Rewinds a stream and returns all of its bytes. Used because the single-stream read
-    /// overload returns a stream positioned at the end of the decompressed content.
+    /// Rewinds a stream and returns all of its bytes, so the round-trip tests do not depend on the
+    /// position of the returned stream (that has a test of its own).
     /// </summary>
     /// <param name="stream">The stream to drain.</param>
     /// <returns>All bytes contained in the stream.</returns>

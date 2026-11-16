@@ -28,7 +28,6 @@ Nothing at the moment.
 
 ## Ideas, not decided
 
-- **Brotli's and AES's returned streams at position 0,** like GZip's since 3.2.5: a behaviour change, with the README.
 - **`IV` and `Key` keep the caller's array:** setting `Certificate` afterwards overwrites that array in place (the
   README says so since 2026-11-15).
 - **The SOAP formatter and untrusted input:** `SoapFormatter.Deserialize` creates the types that the payload names,

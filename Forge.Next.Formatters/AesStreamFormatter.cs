@@ -43,7 +43,7 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
     /// </summary>
     /// <param name="inputStream">The input stream containing the encrypted data.</param>
     /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
-    /// <returns>A task representing the asynchronous operation, containing the decrypted stream or an error.</returns>
+    /// <returns>A task representing the asynchronous operation, containing the decrypted stream or an error. The stream is a new <see cref="MemoryStream"/> at position 0 (since 3.4.0; before, it was at its end), owned by the caller.</returns>
     /// <exception cref="OperationCanceledException"><paramref name="cancellationToken"/> requested cancellation (since 3.4.0 thrown, not returned as an error).</exception>
     public override Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken cancellationToken = default)
     {
@@ -55,9 +55,9 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
             (byte[]? plaintext, Stream? legacy) = await OpenAsync(inputStream, cancellationToken).ConfigureAwait(false);
             if (plaintext is not null)
             {
-                // Positioned at its end, as the stream of the Legacy format is.
                 MemoryStream result = new MemoryStream(plaintext.Length);
                 result.Write(plaintext, 0, plaintext.Length);
+                result.Position = 0; // the caller receives a readable stream, as in the Legacy format
                 return result;
             }
 
@@ -91,6 +91,8 @@ public class AesStreamFormatter : CryptoFormatterBase<Stream>, IAesStreamFormatt
 #endif
                     throw;
                 }
+
+                ms.Position = 0; // the caller receives a readable stream (since 3.4.0; before, it was left at the end)
 
                 return ms;
             }

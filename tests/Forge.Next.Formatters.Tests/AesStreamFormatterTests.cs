@@ -140,9 +140,8 @@ public class AesStreamFormatterTests
     }
 
     /// <summary>
-    /// Full round-trip through the single-stream read overload. The decrypted stream that is
-    /// returned is positioned at its end by the implementation, so the test rewinds it before
-    /// reading its content back for comparison.
+    /// Full round-trip through the single-stream read overload: the decrypted stream holds the
+    /// original bytes.
     /// </summary>
     [Fact]
     public async Task WriteAsyncThenReadAsync_RoundTripsStream_Test()
@@ -352,11 +351,11 @@ public class AesStreamFormatterTests
     // ------------------------------------------------------------------
 
     /// <summary>
-    /// The single-stream read returns a new <see cref="MemoryStream"/> positioned at its end (unlike
-    /// <see cref="GZipStreamFormatter"/>, which rewinds it), so the caller rewinds it before reading.
+    /// The single-stream read returns a new <see cref="MemoryStream"/> at position 0, ready to read, as
+    /// <see cref="GZipStreamFormatter"/> does (since 3.4.0; before, it was left at its end).
     /// </summary>
     [Fact]
-    public async Task ReadAsync_ReturnedStream_IsAtEnd_Test()
+    public async Task ReadAsync_ReturnedStream_IsAtPositionZero_Test()
     {
         // Arrange: a valid payload of a known length.
         AesStreamFormatter formatter = new AesStreamFormatter(Iv, Key);
@@ -369,11 +368,11 @@ public class AesStreamFormatterTests
         // Act
         ErrorOr<Stream?> result = await formatter.ReadAsync(payload);
 
-        // Assert: the stream holds the original bytes and is at its end.
+        // Assert: the stream holds the original bytes and is at its start.
         Assert.False(result.IsError);
         using Stream decompressed = result.Value!;
         Assert.Equal(original.Length, decompressed.Length);
-        Assert.Equal(decompressed.Length, decompressed.Position);
+        Assert.Equal(0, decompressed.Position);
     }
 
     // ------------------------------------------------------------------
@@ -474,10 +473,10 @@ public class AesStreamFormatterTests
 
     /// <summary>
     /// The known-answer message of the authenticated format reads back to the plaintext through the single-stream read,
-    /// whose returned stream is at its end, as in the legacy format.
+    /// whose returned stream is at position 0, as in the legacy format.
     /// </summary>
     [Fact]
-    public async Task ReadAsync_AuthenticatedKnownAnswer_ReturnsPlaintextAtTheEnd_Test()
+    public async Task ReadAsync_AuthenticatedKnownAnswer_ReturnsPlaintextAtPositionZero_Test()
     {
         // Arrange
         AesStreamFormatter formatter = new AesStreamFormatter(Iv, CryptoFormatterBaseTests.NistKey);
@@ -489,7 +488,7 @@ public class AesStreamFormatterTests
         // Assert
         Assert.False(result.IsError);
         using Stream plain = result.Value!;
-        Assert.Equal(plain.Length, plain.Position);
+        Assert.Equal(0, plain.Position);
         Assert.Equal(CryptoFormatterBaseTests.NistPlaintext, ReadAllBytes(plain));
     }
 
@@ -610,8 +609,8 @@ public class AesStreamFormatterTests
 
     /// <summary>
     /// Reads a stream to its end and returns the content as a byte array. The stream is first
-    /// rewound to position 0 because the formatter returns decrypted streams positioned at the
-    /// end of the written data.
+    /// rewound to position 0, so the tests do not depend on the position of the returned stream
+    /// (that has a test of its own).
     /// </summary>
     /// <param name="stream">The stream to drain.</param>
     /// <returns>All bytes contained in the stream.</returns>

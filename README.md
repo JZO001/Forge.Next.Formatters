@@ -208,13 +208,13 @@ that you own (dispose it when you are done). Where it is positioned depends on t
 | Formatter | Position of the returned stream |
 |-----------|---------------------------------|
 | `GZipStreamFormatter.ReadAsync` | **0**, ready to read (since 3.2.5) |
-| `BrotliStreamFormatter.ReadAsync` | **the end** of the data it produced: rewind it before reading |
-| `AesStreamFormatter.ReadAsync` | **the end** of the data it produced: rewind it before reading |
+| `BrotliStreamFormatter.ReadAsync` | **0**, ready to read (since 3.4.0; before, the end) |
+| `AesStreamFormatter.ReadAsync` | **0**, ready to read (since 3.4.0; before, the end) |
 
 ```csharp
 ErrorOr<Stream?> result = await formatter.ReadAsync(input);
 using Stream output = result.Value!;
-output.Position = 0;          // needed for Brotli and AES; harmless for GZip
+output.Position = 0;          // not needed since 3.4.0; harmless, and needed for older versions
 ```
 
 Likewise, after `WriteAsync` fills a `MemoryStream` you must rewind it (`Position = 0`) before you
@@ -446,7 +446,7 @@ Compresses / decompresses a `Stream` using Brotli. Implements
 **Public members**
 
 - `int BufferSize { get; set; }` — chunk size (default `8192`).
-- `Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken)` — decompress and return a `Stream` (positioned at the end — rewind before reading).
+- `Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken)` — decompress and return a new `Stream`, positioned at 0 (since 3.4.0; earlier versions left it at the end).
 - `Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken)` — decompress into `outputStream`.
 - `Task<ErrorOr<Success>> WriteAsync(Stream data, Stream outputStream, CancellationToken)` — compress the `data` stream into `outputStream`.
 
@@ -465,12 +465,12 @@ using var compressed = new MemoryStream();
 // Compress the source stream into `compressed`
 await formatter.WriteAsync(source, compressed);
 
-// Decompress: the returned stream is positioned at its END
+// Decompress: the returned stream is at position 0 (since 3.4.0)
 compressed.Position = 0;
 ErrorOr<Stream?> read = await formatter.ReadAsync(compressed);
 
 Stream decompressed = read.Value!;
-decompressed.Position = 0;                       // rewind!
+decompressed.Position = 0;                       // only needed before 3.4.0
 using var reader = new StreamReader(decompressed);
 string text = await reader.ReadToEndAsync();     // "payload to compress"
 ```
@@ -817,7 +817,7 @@ Encrypts / decrypts a `Stream` with AES-256. Inherits everything from
 
 **Public members**
 
-- `Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken)` — decrypt and return a `Stream` (positioned at the end — rewind before reading).
+- `Task<ErrorOr<Stream?>> ReadAsync(Stream inputStream, CancellationToken)` — decrypt and return a new `Stream`, positioned at 0 (since 3.4.0; earlier versions left it at the end).
 - `Task<ErrorOr<Success>> ReadAsync(Stream inputStream, Stream outputStream, CancellationToken)` — decrypt into `outputStream`.
 - `Task<ErrorOr<Success>> WriteAsync(Stream data, Stream outputStream, CancellationToken)` — encrypt the `data` stream into `outputStream`.
 - Plus the inherited `IV`, `Key`, `Certificate`, `BufferSize` members.
@@ -846,12 +846,12 @@ using var cipher = new MemoryStream();
 // Encrypt the source stream
 await formatter.WriteAsync(source, cipher);
 
-// Decrypt into a returned stream (positioned at its END)
+// Decrypt into a returned stream (at position 0 since 3.4.0)
 cipher.Position = 0;
 ErrorOr<Stream?> read = await formatter.ReadAsync(cipher);
 
 Stream plain = read.Value!;
-plain.Position = 0;                         // rewind!
+plain.Position = 0;                         // only needed before 3.4.0
 using var reader = new StreamReader(plain);
 string message = await reader.ReadToEndAsync(); // "stream secret"
 ```
