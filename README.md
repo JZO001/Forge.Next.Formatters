@@ -77,6 +77,7 @@ compose these operations into reusable data transformation pipelines.
 - [Error handling reference](#error-handling-reference)
 - [Security notes](#security-notes)
 - [Keywords](#keywords)
+- [Support the Project](#support-the-project)
 - [License](#license)
 
 ---
@@ -1333,6 +1334,24 @@ compression, stream compression, byte array compression, AES-256 encryption, AES
 encryption, HMAC-SHA256, stream encryption, file encryption, IDataFormatter, composable formatters,
 data transformation pipelines, stream-based I/O, async serialization API, cancellation token
 support, Microsoft dependency injection, ASP.NET Core, legacy interoperability.
+
+---
+
+## Support the Project
+
+**Forge.Next.Formatters** is developed and maintained independently and provided free of charge.
+
+If this library saves you development time, helps your business, or makes your daily work easier, please consider giving the repository a ⭐ on GitHub.
+
+- ⭐ [Star the repository](https://github.com/JZO001/Forge.Next.Formatters/stargazers)
+- 💬 Share your feedback and experiences
+- 🐛 [Report bugs and suggest improvements](https://github.com/JZO001/Forge.Next.Formatters/issues)
+- 📢 Recommend the library to other developers
+- ☕ Consider sponsoring its continued development
+
+Even a simple GitHub star is a meaningful way to say thank you.
+
+**Open source is free to use, but it is not free to create and maintain.**
 
 ---
 
