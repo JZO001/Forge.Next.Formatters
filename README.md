@@ -2,6 +2,23 @@
 
 **Serialize. Compress. Encrypt. One API.**
 
+[![.NET 8](https://img.shields.io/badge/.NET-8-512BD4?style=flat&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![.NET 9](https://img.shields.io/badge/.NET-9-512BD4?style=flat&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![.NET 10](https://img.shields.io/badge/.NET-10-512BD4?style=flat&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![.NET 11](https://img.shields.io/badge/.NET-11-512BD4?style=flat&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![.NET Framework 4.8](https://img.shields.io/badge/.NET_Framework-4.8-512BD4?style=flat&logo=dotnet&logoColor=white)](https://learn.microsoft.com/dotnet/framework/)
+[![C#](https://img.shields.io/badge/Language-C%23-239120?style=flat)](https://learn.microsoft.com/dotnet/csharp/)
+
+[![NuGet version](https://img.shields.io/nuget/v/Forge.Next.Formatters?style=flat&logo=nuget&logoColor=white)](https://www.nuget.org/packages/Forge.Next.Formatters)
+[![NuGet downloads](https://img.shields.io/nuget/dt/Forge.Next.Formatters?style=flat&logo=nuget&logoColor=white)](https://www.nuget.org/packages/Forge.Next.Formatters)
+[![License](https://img.shields.io/github/license/JZO001/Forge.Next.Formatters?style=flat)](https://github.com/JZO001/Forge.Next.Formatters)
+[![GitHub stars](https://img.shields.io/github/stars/JZO001/Forge.Next.Formatters?style=flat&logo=github)](https://github.com/JZO001/Forge.Next.Formatters/stargazers)
+
+[![ErrorOr Integration](https://img.shields.io/badge/ErrorOr-Integration-E67E22?style=flat)](https://github.com/amantinband/error-or)
+[![Serialization JSON | XML | SOAP](https://img.shields.io/badge/Serialization-JSON_%7C_XML_%7C_SOAP-555555?style=flat)](https://learn.microsoft.com/dotnet/standard/serialization/)
+[![Compression GZip | Brotli](https://img.shields.io/badge/Compression-GZip_%7C_Brotli-555555?style=flat)](https://learn.microsoft.com/dotnet/api/system.io.compression)
+[![Encryption AES-256](https://img.shields.io/badge/Encryption-AES--256-555555?style=flat)](https://learn.microsoft.com/dotnet/api/system.security.cryptography.aes)
+
 A unified, asynchronous data transformation library for .NET.
 
 Forge.Next.Formatters is a C# library for **JSON, XML and SOAP serialization**, **GZip and Brotli
@@ -19,37 +36,6 @@ compose these operations into reusable data transformation pipelines.
 - **License:** Apache-2.0
 - **Package dependencies:** [`Forge.Next.Shared`](https://www.nuget.org/packages/Forge.Next.Shared), [`SoapFormatter`](https://www.nuget.org/packages/SoapFormatter)
 - **Repository:** <https://github.com/JZO001/Forge.Next.Formatters>
-
----
-
-## Features at a glance
-
-| Feature | Description |
-|---------|-------------|
-| **Data serialization** | JSON serialization with `System.Text.Json`, XML serialization with `XmlSerializer`, and SOAP serialization for legacy interoperability. |
-| **Data compression** | GZip and Brotli compression and decompression for byte arrays (`byte[]`) and streams (`Stream`). |
-| **Data encryption** | AES-256-CBC encryption and decryption for byte arrays and streams, with an opt-in authenticated format using HMAC-SHA256 since 3.4.0. |
-| **Asynchronous API** | Consistent `ReadAsync` and `WriteAsync` contracts with `CancellationToken` support. XML and SOAP use synchronous serializers behind the async API. |
-| **Result-based error handling** | Predictable `ErrorOr<T>` results for expected failures; caller-requested cancellation propagates as an exception. |
-| **Dependency injection** | Integration with `Microsoft.Extensions.DependencyInjection`, including transient, scoped and singleton registrations (SOAP is always transient). |
-| **Composable formatters** | Combine serialization, compression and encryption using a common interface and file/stream extension methods. |
-| **Multi-target framework support** | .NET Framework 4.8, .NET 8, .NET 9, .NET 10 and .NET 11. Brotli implementations are unavailable on .NET Framework 4.8. |
-
-For new encryption workloads, use `AesOutputFormat.Authenticated` with
-`AcceptUnauthenticated = false`; the default legacy AES format does not authenticate ciphertext.
-See [Security notes](#security-notes) for encryption and SOAP deserialization constraints.
-
-## Common use cases
-
-- Serialize and deserialize C# objects to JSON, XML or SOAP using a common formatter API.
-- Compress and decompress files, byte arrays and streams using GZip or Brotli.
-- Encrypt and decrypt application data using AES-256 with appropriate key management.
-- Combine compression and encryption in a reusable data transformation pipeline.
-- Persist objects to compressed JSON or XML files with convenient file and stream helpers.
-- Integrate data formatters into ASP.NET Core applications, background services and other .NET
-  applications through dependency injection.
-- Reuse a consistent result-based error-handling pattern across serialization, compression and
-  cryptographic operations.
 
 ---
 
@@ -90,7 +76,39 @@ See [Security notes](#security-notes) for encryption and SOAP deserialization co
   - [Persist an object to a compressed file](#persist-an-object-to-a-compressed-file)
 - [Error handling reference](#error-handling-reference)
 - [Security notes](#security-notes)
+- [Keywords](#keywords)
 - [License](#license)
+
+---
+
+## Features at a glance
+
+| Feature | Description |
+|---------|-------------|
+| **Data serialization** | JSON serialization with `System.Text.Json`, XML serialization with `XmlSerializer`, and SOAP serialization for legacy interoperability. |
+| **Data compression** | GZip and Brotli compression and decompression for byte arrays (`byte[]`) and streams (`Stream`). |
+| **Data encryption** | AES-256-CBC encryption and decryption for byte arrays and streams, with an opt-in authenticated format using HMAC-SHA256 since 3.4.0. |
+| **Asynchronous API** | Consistent `ReadAsync` and `WriteAsync` contracts with `CancellationToken` support. XML and SOAP use synchronous serializers behind the async API. |
+| **Result-based error handling** | Predictable `ErrorOr<T>` results for expected failures; caller-requested cancellation propagates as an exception. |
+| **Dependency injection** | Integration with `Microsoft.Extensions.DependencyInjection`, including transient, scoped and singleton registrations (SOAP is always transient). |
+| **Composable formatters** | Combine serialization, compression and encryption using a common interface and file/stream extension methods. |
+| **Multi-target framework support** | .NET Framework 4.8, .NET 8, .NET 9, .NET 10 and .NET 11. Brotli implementations are unavailable on .NET Framework 4.8. |
+
+For new encryption workloads, use `AesOutputFormat.Authenticated` with
+`AcceptUnauthenticated = false`; the default legacy AES format does not authenticate ciphertext.
+See [Security notes](#security-notes) for encryption and SOAP deserialization constraints.
+
+## Common use cases
+
+- Serialize and deserialize C# objects to JSON, XML or SOAP using a common formatter API.
+- Compress and decompress files, byte arrays and streams using GZip or Brotli.
+- Encrypt and decrypt application data using AES-256 with appropriate key management.
+- Combine compression and encryption in a reusable data transformation pipeline.
+- Persist objects to compressed JSON or XML files with convenient file and stream helpers.
+- Integrate data formatters into ASP.NET Core applications, background services and other .NET
+  applications through dependency injection.
+- Reuse a consistent result-based error-handling pattern across serialization, compression and
+  cryptographic operations.
 
 ---
 
@@ -1302,6 +1320,19 @@ Handy `ErrorOr<T>` members:
   which the SOAP formatter creates on its own, so there read trusted SOAP input only.
 - **Errors carry internals.** An `Unexpected` error's metadata holds the exception's type, message
   and stack trace. Log it, but do not send it unfiltered to an end user or another system.
+
+---
+
+## Keywords
+
+Forge Patterns and Practices, Forge.Next, C#, .NET, .NET 8, .NET 9, .NET 10, .NET 11, .NET Framework
+4.8, NuGet package, ErrorOr, result pattern, result-based error handling, functional error handling,
+C# serialization library, .NET data transformation, JSON serialization, System.Text.Json, XML
+serialization, XmlSerializer, SOAP serialization, SoapFormatter, GZip compression, Brotli
+compression, stream compression, byte array compression, AES-256 encryption, AES-CBC, authenticated
+encryption, HMAC-SHA256, stream encryption, file encryption, IDataFormatter, composable formatters,
+data transformation pipelines, stream-based I/O, async serialization API, cancellation token
+support, Microsoft dependency injection, ASP.NET Core, legacy interoperability.
 
 ---
 
