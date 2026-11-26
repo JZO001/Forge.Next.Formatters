@@ -1,11 +1,20 @@
 # Forge.Next.Formatters
 
-Reference, practice and pattern implementations of **data formatters** for .NET: compression
-(GZip, Brotli), symmetric encryption (AES) and serialization (XML, SOAP, JSON). Every formatter
-shares one small, predictable, `async` contract and never throws for expected failures — it returns
-an [`ErrorOr<T>`](https://github.com/amantinband/error-or) result instead.
+**Serialize. Compress. Encrypt. One API.**
 
-- **Package version:** `3.4.0`
+A unified, asynchronous data transformation library for .NET.
+
+Forge.Next.Formatters is a C# library for **JSON, XML and SOAP serialization**, **GZip and Brotli
+compression**, and **AES-256 encryption and decryption**. It provides a consistent, stream-oriented
+`IDataFormatter<T>` contract, result-based error handling with
+[`ErrorOr<T>`](https://github.com/amantinband/error-or), cancellation support and integration with
+Microsoft dependency injection.
+
+Instead of maintaining separate APIs and repetitive error-handling code for each data format,
+use the same formatter abstraction to serialize objects, compress payloads, encrypt data and
+compose these operations into reusable data transformation pipelines.
+
+- **Package version:** `3.4.0` — [View on NuGet](https://www.nuget.org/packages/Forge.Next.Formatters)
 - **Target frameworks:** `net48` (without the Brotli formatters), `net8.0`, `net9.0`, `net10.0`, `net11.0`
 - **License:** Apache-2.0
 - **Package dependencies:** [`Forge.Next.Shared`](https://www.nuget.org/packages/Forge.Next.Shared), [`SoapFormatter`](https://www.nuget.org/packages/SoapFormatter)
@@ -13,8 +22,41 @@ an [`ErrorOr<T>`](https://github.com/amantinband/error-or) result instead.
 
 ---
 
+## Features at a glance
+
+| Feature | Description |
+|---------|-------------|
+| **Data serialization** | JSON serialization with `System.Text.Json`, XML serialization with `XmlSerializer`, and SOAP serialization for legacy interoperability. |
+| **Data compression** | GZip and Brotli compression and decompression for byte arrays (`byte[]`) and streams (`Stream`). |
+| **Data encryption** | AES-256-CBC encryption and decryption for byte arrays and streams, with an opt-in authenticated format using HMAC-SHA256 since 3.4.0. |
+| **Asynchronous API** | Consistent `ReadAsync` and `WriteAsync` contracts with `CancellationToken` support. XML and SOAP use synchronous serializers behind the async API. |
+| **Result-based error handling** | Predictable `ErrorOr<T>` results for expected failures; caller-requested cancellation propagates as an exception. |
+| **Dependency injection** | Integration with `Microsoft.Extensions.DependencyInjection`, including transient, scoped and singleton registrations (SOAP is always transient). |
+| **Composable formatters** | Combine serialization, compression and encryption using a common interface and file/stream extension methods. |
+| **Multi-target framework support** | .NET Framework 4.8, .NET 8, .NET 9, .NET 10 and .NET 11. Brotli implementations are unavailable on .NET Framework 4.8. |
+
+For new encryption workloads, use `AesOutputFormat.Authenticated` with
+`AcceptUnauthenticated = false`; the default legacy AES format does not authenticate ciphertext.
+See [Security notes](#security-notes) for encryption and SOAP deserialization constraints.
+
+## Common use cases
+
+- Serialize and deserialize C# objects to JSON, XML or SOAP using a common formatter API.
+- Compress and decompress files, byte arrays and streams using GZip or Brotli.
+- Encrypt and decrypt application data using AES-256 with appropriate key management.
+- Combine compression and encryption in a reusable data transformation pipeline.
+- Persist objects to compressed JSON or XML files with convenient file and stream helpers.
+- Integrate data formatters into ASP.NET Core applications, background services and other .NET
+  applications through dependency injection.
+- Reuse a consistent result-based error-handling pattern across serialization, compression and
+  cryptographic operations.
+
+---
+
 ## Table of contents
 
+- [Features at a glance](#features-at-a-glance)
+- [Common use cases](#common-use-cases)
 - [Installation](#installation)
 - [Why this library](#why-this-library)
 - [Core concepts](#core-concepts)
